@@ -1,0 +1,18 @@
+{{define "partials/agents/timeline"}}
+{{$a := index .Data "Agent"}}
+{{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
+{{if $a.Error}}<div class="notice error">{{$a.Error}}</div>{{end}}
+{{if $a.Messages}}
+  {{range $a.Messages}}<article class="message {{.Role}}"><header><span class="role">{{.Role}}</span><span class="status {{.Status}}">{{.Status}}</span></header>{{if .Body}}<details class="tool-body"><summary>{{.Content}}</summary><pre><code>{{.Body}}</code></pre></details>{{else}}<p>{{.Content}}</p>{{end}}</article>{{end}}
+{{else}}
+  <div class="empty"><h2>Start planning/building</h2><p>Send the first message to launch your pi agent in this project.</p></div>
+{{end}}
+{{if $a.Requests}}{{with index $a.Requests 0}}<div class="request-bar"><span class="badge">{{.Mode}}</span><span class="badge {{.Status}}">{{.Status}}</span>{{if eq .Status "streaming"}}<button hx-post="/projects/{{$a.Project.ID}}/agent/requests/{{.ID}}/cancel" hx-target="#agent-timeline" hx-swap="innerHTML" class="button danger small">Cancel</button>{{end}}</div>{{end}}{{end}}
+{{if $a.Streaming}}<div class="muted working" hx-get="/projects/{{$a.Project.ID}}/agent/timeline" hx-trigger="load delay:1s" hx-target="#agent-timeline" hx-swap="innerHTML">pi is working…</div>{{end}}
+{{end}}
+
+{{define "partials/agents/live"}}
+{{template "partials/agents/timeline" .}}
+<div id="pending-interaction-panel" hx-swap-oob="true">{{template "partials/agents/pending" (dict "Data" .Data)}}</div>
+<div id="session-stats" hx-swap-oob="true">{{template "partials/agents/stats" (dict "Data" .Data)}}</div>
+{{end}}

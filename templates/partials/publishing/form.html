@@ -1,0 +1,14 @@
+{{define "partials/publishing/form"}}
+{{$d := index .Data "Draft"}}
+{{if .Flash}}<div class="notice">{{.Flash}}</div>{{end}}
+<form class="panel form-stack" hx-post="/projects/{{$d.ProjectID}}/publish/draft" hx-target="#publish-draft-form">
+<label>App name<input name="app_name" value="{{$d.AppName}}"></label>
+<label>Headline<input name="headline" value="{{$d.Headline}}"></label>
+<label>Description<textarea name="description" placeholder="Left blank, the headline is used.">{{$d.Description}}</textarea></label>
+<label>Changelog<textarea name="changelog">{{$d.Changelog}}</textarea></label>
+<div class="grid two"><label>Target<select name="publish_target"><option value="public">Public</option><option value="organization">Organization</option></select></label><label>Visibility<select name="visibility"><option value="unlisted">Unlisted</option><option value="public">Public</option></select></label></div>
+<label>Lifetime<select name="expires_days"><option value="0" {{if eq $d.ExpiresDays 0}}selected{{end}}>Permanent</option><option value="1" {{if eq $d.ExpiresDays 1}}selected{{end}}>Disposable — 1 day</option><option value="7" {{if eq $d.ExpiresDays 7}}selected{{end}}>Disposable — 1 week</option><option value="30" {{if eq $d.ExpiresDays 30}}selected{{end}}>Disposable — 1 month</option></select><span class="muted">Disposable apps uninstall and delist themselves when time's up; the project survives.</span></label>
+<label class="check"><input type="checkbox" name="auto_install"{{if $d.AutoInstall}} checked{{end}}> Start the app on localhost when the build succeeds</label>
+<div class="actions"><button class="button primary" hx-post="/projects/{{$d.ProjectID}}/publish" hx-target="#publishing-job-list">Publish</button><button class="button">Save draft only</button></div>
+</form>
+{{end}}

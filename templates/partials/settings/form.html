@@ -1,0 +1,27 @@
+{{define "partials/settings/form"}}
+{{$s := index .Data "Settings"}}
+{{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
+<form class="panel form-stack" hx-post="/settings" hx-target="#settings-panel">
+  <fieldset><legend>Appearance</legend>
+    <label>Theme<select name="appearance">
+      <option value="system"{{if eq $s.Appearance "system"}} selected{{end}}>System</option>
+      <option value="light"{{if eq $s.Appearance "light"}} selected{{end}}>Light</option>
+      <option value="dark"{{if eq $s.Appearance "dark"}} selected{{end}}>Dark</option>
+    </select></label>
+    <label>Accent style<select name="style_profile">
+      <option value="graphite"{{if eq $s.StyleProfile "graphite"}} selected{{end}}>Graphite</option>
+      <option value="blueprint"{{if eq $s.StyleProfile "blueprint"}} selected{{end}}>Blueprint</option>
+      <option value="warm"{{if eq $s.StyleProfile "warm"}} selected{{end}}>Warm</option>
+    </select></label>
+    <p class="muted">Runs as a solo local workspace — no sign-in, no accounts.</p>
+  </fieldset>
+  <fieldset><legend>Nightly build fairy</legend>
+    <label class="check"><input type="checkbox" name="fairy_enabled"{{if $s.FairyEnabled}} checked{{end}}> Grant pending wishes automatically each night</label>
+    <label>Night shift starts at<select name="fairy_hour">
+      {{range $h := ints 0 24}}<option value="{{$h}}"{{if eq $s.FairyHour $h}} selected{{end}}>{{printf "%02d:00" $h}}</option>{{end}}
+    </select></label>
+    <p class="muted">Up to three wishes per night become trusted projects, built and published while you sleep. oozie must be running.</p>
+  </fieldset>
+  <button class="button primary">Save settings</button>
+</form>
+{{end}}

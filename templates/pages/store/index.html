@@ -1,0 +1,37 @@
+{{define "pages/store/index-content"}}
+<section class="toolbar"><div><p class="eyebrow">Pages</p><h1>Your pages</h1><p class="muted">Running and stopped. Open one, or remix it into something else.</p></div></section>
+<form class="filterbar" hx-get="/fragments/store/results" hx-target="#store-results" hx-trigger="input changed delay:250ms, change"><label>Search<input name="q" placeholder="app or headline"></label><label>Filter<select name="filter"><option value="">All Apps</option><option value="featured">Featured</option><option value="public">Public</option><option value="org">Organization</option><option value="installed">Running</option></select></label></form>
+<div id="store-results">{{template "partials/store/list" .}}</div>
+{{end}}
+
+{{define "pages/store/show-content"}}
+{{$app := index .Data "App"}}
+<section class="panel detail">
+  <p class="eyebrow">Store app</p>
+  <h1>{{$app.Name}}</h1>
+  <p class="lead">{{$app.Headline}}</p>
+  <p>{{$app.Description}}</p>
+  {{if $app.PublicURL}}<p><a href="{{$app.PublicURL}}" target="_blank" rel="noopener">{{$app.PublicURL}}</a></p>{{end}}
+  <div class="chips"><span>{{$app.Visibility}}</span>{{if $app.Featured}}<span>featured</span>{{end}}<span>{{$app.InstallCount}} starts</span></div>
+  <div class="actions">
+    {{if $app.Installed}}
+    <form hx-post="/store/apps/{{$app.ID}}/open" hx-target="#store-app-card"><button class="button primary">Open</button></form>
+    <form hx-post="/store/apps/{{$app.ID}}/install" hx-target="#store-app-card"><button class="button">Restart</button></form>
+    <form hx-post="/store/apps/{{$app.ID}}/uninstall" hx-target="#store-app-card" hx-confirm="Stop {{$app.Name}}? It stays in your store."><button class="button">Stop</button></form>
+    {{else}}
+    <form hx-post="/store/apps/{{$app.ID}}/install" hx-target="#store-app-card"><button class="button primary">Start</button></form>
+    {{end}}
+    {{if $app.BundleSlug}}<a class="button" href="/improve/{{$app.BundleSlug}}">Request a fix</a>{{end}}
+    {{if $app.ProjectID}}<a class="button" href="/store/apps/{{$app.ID}}/recipe">Export recipe</a>{{end}}
+    <form hx-post="/store/apps/{{$app.ID}}/remove" hx-target="#store-app-card" hx-confirm="Remove {{$app.Name}} from your store? The running copy is stopped too; the project is kept."><button class="button danger">Remove from store</button></form>
+  </div>
+  <div id="store-app-card"></div>
+</section>
+{{if index .Data "Error"}}<div class="notice error">{{index .Data "Error"}}</div>{{end}}
+{{if $app.ProjectID}}<section class="panel" style="margin-top:12px"><p class="eyebrow">Remix</p><h2>Fork this app into something new</h2><p class="muted">The full source is copied into a fresh project and the agent applies your mutation — "like this, but for reading sessions".</p><form method="post" action="/store/apps/{{$app.ID}}/remix" class="form-stack"><label>Mutation<input name="mutation" placeholder="Like {{$app.Name}}, but…" required></label><div class="actions"><button class="button primary">Remix</button></div></form></section>{{end}}
+{{end}}
+
+{{define "pages/store/installed-content"}}
+<section class="toolbar"><div><p class="eyebrow">Local tools</p><h1>Running Apps</h1><p class="muted">Web apps oozie is serving on localhost. Stopping one keeps it in the store.</p></div><a class="button" href="/store">Browse Store</a></section>
+<div id="store-results">{{template "partials/store/list" .}}</div>
+{{end}}

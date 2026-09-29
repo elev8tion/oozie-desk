@@ -1,0 +1,30 @@
+{{define "pages/wishes/index-content"}}
+<section class="toolbar"><div><p class="eyebrow">Wish inbox</p><h1>Wishes</h1><p class="muted">Apps you wish existed. Build one now, or let the nightly fairy grant up to three while you sleep (enable it in Settings).</p></div></section>
+{{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
+{{if .Err}}<div class="notice error">{{.Err}}</div>{{end}}
+<form method="post" action="/wishes" class="panel form-stack narrow">
+  <label>I wish I had an app that…<textarea name="text" placeholder="…tracks how long my sourdough starter has been fed, with a menu-bar countdown" required></textarea></label>
+  <div class="actions"><button class="button primary">Add wish</button></div>
+</form>
+<div class="panel table-panel" style="margin-top:12px">
+{{$wishes := index .Data "Wishes"}}
+{{if $wishes}}
+<table><thead><tr><th>Wish</th><th>Status</th><th>Added</th><th></th></tr></thead><tbody>
+{{range $w := $wishes}}
+<tr>
+  <td>{{$w.Text}}{{if $w.Error}}<br><span class="danger">{{$w.Error}}</span>{{end}}</td>
+  <td><span class="badge {{$w.Status}}">{{$w.Status}}</span></td>
+  <td>{{ago $w.CreatedAt}}</td>
+  <td><div class="row-actions">
+    {{if $w.ProjectID}}<a class="button small" href="/projects/{{$w.ProjectID}}/agent">Project</a>{{end}}
+    {{if ne $w.Status "building"}}<form method="post" action="/wishes/{{$w.ID}}/build"><button class="button primary small">Build now</button></form>
+    <form method="post" action="/wishes/{{$w.ID}}/delete"><button class="button danger small">Delete</button></form>{{end}}
+  </div></td>
+</tr>
+{{end}}
+</tbody></table>
+{{else}}<div class="empty">No wishes yet. What do you keep doing by hand?</div>{{end}}
+</div>
+{{end}}
+
+{{define "pages/wishes/index-placeholder"}}<div></div>{{end}}

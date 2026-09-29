@@ -1,0 +1,10 @@
+{{define "partials/projects/list"}}
+{{if .Flash}}<div class="notice">{{.Flash}}</div>{{end}}
+<div class="panel table-panel">
+  {{with index .Data "Projects"}}
+  <table><thead><tr><th>Name</th><th>Status</th><th>Path</th><th>Trusted</th><th></th></tr></thead><tbody>
+  {{range .}}{{template "partials/projects/row" dict "Data" (dict "Project" .)}}{{end}}
+  </tbody></table>
+  {{else}}<div class="empty"><h2>No projects yet</h2><p>Create a project to start planning or building.</p><a class="button primary" href="/projects/new">Create Project</a></div>{{end}}
+</div>
+{{end}}

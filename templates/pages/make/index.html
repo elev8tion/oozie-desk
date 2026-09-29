@@ -1,0 +1,36 @@
+{{define "pages/make/index-content"}}
+<section class="make">
+  <p class="eyebrow">oozie</p>
+  <h1>What should this page do?</h1>
+  <p class="muted">One sentence. oozie builds it on this machine and opens it.</p>
+  {{if .Err}}<p class="danger">{{.Err}}</p>{{end}}
+  <form method="post" action="/make" class="form-stack">
+    <label>Page<textarea name="text" rows="4" required placeholder="A page that tracks my sourdough feedings">{{index .Data "Text"}}</textarea></label>
+    <div class="actions"><button class="button primary">Build and open</button></div>
+  </form>
+</section>
+{{end}}
+
+{{define "pages/make/wait-content"}}
+{{$st := index .Data "Status"}}
+<section class="make">
+  <p class="eyebrow">{{$st.Name}}</p>
+  <h1>Building your page</h1>
+  <p class="muted">{{$st.Text}}</p>
+  {{template "partials/make/status" .}}
+</section>
+{{end}}
+
+{{define "partials/make/status"}}
+{{$st := index .Data "Status"}}
+<div id="make-status" {{if eq $st.Phase "building"}}hx-get="/fragments/make/{{$st.ProjectID}}" hx-trigger="load delay:2s" hx-swap="outerHTML"{{end}}>
+  {{if eq $st.Phase "open"}}
+    <p>Opening <a href="{{$st.URL}}">{{$st.URL}}</a></p>
+  {{else if eq $st.Phase "failed"}}
+    <p class="danger">{{$st.Error}}</p>
+    <p><a class="button" href="{{$st.RetryURL}}">Try another sentence</a></p>
+  {{else}}
+    <p>Building… this stays here until the page is open.</p>
+  {{end}}
+</div>
+{{end}}

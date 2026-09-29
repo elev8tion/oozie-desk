@@ -1,0 +1,8 @@
+# compiled binary
+/app
+/oozie
+# local database
+/data/
+# macOS
+.DS_Store
+/dist/

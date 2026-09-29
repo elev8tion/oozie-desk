@@ -1,0 +1,12 @@
+{{define "partials/agents/stats"}}
+{{$a := index .Data "Agent"}}
+{{if $a}}{{with $a.Stats}}
+<h2>Session stats</h2>
+<div class="chips">
+  <span>tokens in {{tokens .InputTokens}}</span>
+  <span>out {{tokens .OutputTokens}}</span>
+  <span>cost ${{printf "%.4f" .Cost}}</span>
+  <span>context {{printf "%.1f" .ContextPercent}}%</span>
+</div>
+{{end}}{{end}}
+{{end}}

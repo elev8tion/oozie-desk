@@ -1,0 +1,4 @@
+{{define "partials/publishing/row"}}
+{{$j := index .Data "Job"}}
+<tr><td>#{{$j.ID}}</td><td>{{$j.ProjectName}}</td><td><span class="badge {{$j.Status}}">{{$j.Status}}</span></td><td class="muted">{{$j.ErrorMessage}}</td><td>{{ts $j.UpdatedAt}}</td></tr>
+{{end}}

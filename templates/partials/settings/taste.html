@@ -1,0 +1,12 @@
+{{define "partials/settings/taste"}}
+{{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
+{{if .Err}}<div class="notice error">{{.Err}}</div>{{end}}
+<form class="panel form-stack" hx-post="/settings/taste" hx-target="#taste-panel">
+  <fieldset><legend>Your taste</legend>
+    <p class="muted">Your design voice. Every project gets a fresh copy of this file (TASTE.md) before the agent works, and its rules override the generic design standard. oozie appends your remix mutations and fix requests under Signals — promote the patterns into rules.</p>
+    <label class="sr-only">TASTE.md</label>
+    <textarea name="taste" rows="16" style="font-family:ui-monospace,monospace">{{index .Data "Taste"}}</textarea>
+  </fieldset>
+  <button class="button primary">Save taste</button>
+</form>
+{{end}}

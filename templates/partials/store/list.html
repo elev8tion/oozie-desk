@@ -1,0 +1,10 @@
+{{define "partials/store/list"}}
+{{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
+<div class="card-grid">
+{{with index .Data "Apps"}}
+  {{range .}}{{template "partials/store/row" dict "Data" (dict "App" .)}}{{end}}
+{{else}}
+  <div class="empty panel"><h2>No store apps</h2><p>Try another filter or seed apps in SQLite.</p></div>
+{{end}}
+</div>
+{{end}}

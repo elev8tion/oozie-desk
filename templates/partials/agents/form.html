@@ -1,0 +1,17 @@
+{{define "partials/agents/form"}}
+{{$a := index .Data "Agent"}}
+{{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
+<form class="composer" hx-post="/projects/{{$a.Project.ID}}/agent/requests" hx-target="#agent-timeline" hx-swap="innerHTML">
+  <fieldset class="segmented"><legend class="sr-only">Mode</legend><label><input type="radio" name="mode" value="build" checked> Build</label><label><input type="radio" name="mode" value="plan"> Plan</label></fieldset>
+  <textarea name="message" required placeholder="Ask pi to plan or build in this project…"></textarea>
+  <div class="composer-foot">
+    <label class="model-picker">Model
+      <select name="model" hx-post="/projects/{{$a.Project.ID}}/agent/model" hx-target="#agent-composer-shell" hx-swap="innerHTML" hx-trigger="change">
+        {{range $a.Models}}<option value="{{.Full}}" {{if eq .Full $a.Model}}selected{{end}}>{{.Full}}</option>{{else}}<option value="">pi default</option>{{end}}
+      </select>
+    </label>
+    <span class="muted">Cmd+Enter to send. While the agent is working, sending steers it mid-run — no need to wait or cancel.</span>
+    <button class="button primary">Send</button>
+  </div>
+</form>
+{{end}}

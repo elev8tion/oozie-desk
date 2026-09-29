@@ -1,0 +1,17 @@
+{{define "partials/agents/pending"}}
+{{$a := index .Data "Agent"}}
+{{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
+{{if $a}}
+  {{with $a.Question}}<section class="pending"><h3>pi is asking</h3><p>{{.Prompt}}</p>
+    {{if .Options}}
+      <form hx-post="/projects/{{$a.Project.ID}}/agent/questions/{{.ID}}/answer" hx-target="#pending-interaction-panel" class="option-list">
+        {{range .Options}}<button class="button small" name="answer" value="{{.}}">{{.}}</button>{{end}}
+      </form>
+    {{else}}
+      <form hx-post="/projects/{{$a.Project.ID}}/agent/questions/{{.ID}}/answer" hx-target="#pending-interaction-panel" class="answer-row"><input name="answer" placeholder="Your answer"><button class="button primary small">Answer</button></form>
+    {{end}}
+    <button class="button small" hx-post="/projects/{{$a.Project.ID}}/agent/questions/{{.ID}}/dismiss" hx-target="#pending-interaction-panel">Dismiss</button></section>{{end}}
+  {{with $a.Permission}}<section class="pending"><h3>Permission request</h3><p><strong>{{.PermissionName}}</strong>{{if .Reason}} — {{.Reason}}{{end}}</p><form hx-post="/projects/{{$a.Project.ID}}/agent/permissions/{{.ID}}" hx-target="#pending-interaction-panel" class="actions"><button class="button primary small" name="decision" value="approve">Approve</button><button class="button danger small" name="decision" value="deny">Deny</button></form></section>{{end}}
+  {{if $a.Streaming}}{{if or $a.Question $a.Permission}}{{else}}<p class="muted">pi is working — approvals will appear here.</p>{{end}}{{end}}
+{{end}}
+{{end}}

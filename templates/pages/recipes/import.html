@@ -1,0 +1,25 @@
+{{define "pages/recipes/import-content"}}
+<section class="toolbar"><div><p class="eyebrow">Recipes</p><h1>Recipes</h1><p class="muted">Apps shared as prompts, not binaries. Import one and your local agent rebuilds it here; export any published app to share the idea anywhere.</p></div></section>
+{{if index .Data "Error"}}<div class="notice error">{{index .Data "Error"}}</div>{{end}}
+<div class="grid two">
+  <form method="post" action="/recipes/import" enctype="multipart/form-data" class="panel form-stack">
+    <p class="eyebrow">Import</p>
+    <label>Paste a recipe<textarea name="recipe" rows="10" placeholder='{"kind":"oozie-recipe/v1", …}'>{{index .Data "Recipe"}}</textarea></label>
+    <label>…or upload a .oozie-recipe.json file<input type="file" name="recipe_file" accept=".json,application/json"></label>
+    <div class="actions"><button class="button primary">Import &amp; rebuild</button></div>
+    <p class="muted">A new project is created and the agent starts building immediately — you land on its agent page to watch.</p>
+  </form>
+  <div class="panel">
+    <p class="eyebrow">Export</p>
+    {{$apps := index .Data "Apps"}}
+    {{if $apps}}
+    <p class="muted">Download any published app as a recipe to share or back up.</p>
+    {{range $app := $apps}}{{if $app.ProjectID}}<div class="mini-row"><span class="strong">{{$app.Name}}</span><a class="button small" href="/store/apps/{{$app.ID}}/recipe">Export recipe</a></div>{{end}}{{end}}
+    {{else}}
+    <div class="empty">Nothing published yet — publish an app and it becomes exportable here.</div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "pages/recipes/import-placeholder"}}<div></div>{{end}}

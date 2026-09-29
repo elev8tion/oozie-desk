@@ -1,0 +1,9 @@
+{{define "partials/projects/form"}}
+<form class="panel form-stack" method="post" action="/projects" hx-post="/projects" hx-target="#project-list">
+  <label>Project name<input name="name" required placeholder="Tiny Launchpad"></label>
+  <label>Display path<input name="project_path_display" placeholder="~/Projects/tiny-launchpad"></label>
+  <label class="check"><input type="checkbox" name="trusted" checked> Mark this display path trusted</label>
+  <div id="project-list"></div>
+  <button class="button primary">Create Project</button>
+</form>
+{{end}}

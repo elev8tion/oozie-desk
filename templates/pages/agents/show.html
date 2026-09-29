@@ -1,0 +1,10 @@
+{{define "pages/agents/show-content"}}
+{{$a := index .Data "Agent"}}
+<section class="toolbar compact"><div><p class="eyebrow">Agent session</p><h1>{{$a.Project.Name}}</h1><p class="muted">Your local pi instance, running in this project’s directory with your terminal model list.</p><p class="muted">Model: <strong>{{$a.Model}}</strong></p></div><a class="button" href="/projects/{{$a.Project.ID}}">Project</a></section>
+<div class="agent-layout">
+  <section class="panel timeline-panel" id="agent-timeline">{{template "partials/agents/timeline" .}}</section>
+  <aside class="panel inspector"><h2>Context</h2><div class="chips"><span>project:{{$a.Project.Name}}</span><span>trusted:{{if $a.Project.Trusted}}yes{{else}}no{{end}}</span><span>status:{{$a.Project.Status}}</span></div><div id="session-stats">{{template "partials/agents/stats" .}}</div><div id="pending-interaction-panel">{{template "partials/agents/pending" .}}</div></aside>
+</div>
+<div id="agent-composer-shell">{{template "partials/agents/form" .}}</div>
+{{end}}
+{{define "pages/agents/index-content"}}{{template "pages/agents/show-content" .}}{{end}}

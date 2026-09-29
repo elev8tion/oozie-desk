@@ -1,0 +1,32 @@
+{{define "partials/store/row"}}
+{{if .Err}}<div class="notice error">{{.Err}}</div>{{end}}
+{{$app := index .Data "App"}}
+<article class="store-card" id="store-app-{{$app.ID}}">
+  <header>
+    <h2><a href="/store/apps/{{$app.ID}}">{{$app.Name}}</a></h2>
+    <div class="badges">
+      <span class="badge">{{$app.Visibility}}</span>
+      {{if $app.Featured}}<span class="badge good">featured</span>{{end}}
+      {{if $app.Installed}}<span class="badge good">running</span>{{end}}
+      {{if $app.Dormant}}<span class="badge warn">dormant</span>{{end}}
+      {{if $app.ExpiresAt}}<span class="badge warn">self-destructs in {{$app.ExpiresInDays}}d</span>{{end}}
+    </div>
+  </header>
+  <p class="strong">{{$app.Headline}}</p>
+  <p class="muted">{{$app.Description}}</p>
+  {{if $app.PublicURL}}<p class="muted"><a href="{{$app.PublicURL}}" target="_blank" rel="noopener">{{$app.PublicURL}}</a></p>{{end}}
+  <footer>
+    <span>{{$app.PublishedVersion}}{{if $app.Installed}} · {{if $app.LastLaunchAt}}opened {{$app.LaunchCount}}× · last {{ago $app.LastLaunchAt}}{{else}}never opened{{end}}{{end}}</span>
+    <div class="actions">
+      {{if $app.Installed}}
+      <form hx-post="/store/apps/{{$app.ID}}/open" hx-target="#store-app-{{$app.ID}}" hx-swap="outerHTML"><button class="button primary small">Open</button></form>
+      <form hx-post="/store/apps/{{$app.ID}}/uninstall" hx-target="#store-app-{{$app.ID}}" hx-swap="outerHTML" hx-confirm="Stop {{$app.Name}}? It stays in your store."><button class="button small">Stop</button></form>
+      {{else}}
+      <form hx-post="/store/apps/{{$app.ID}}/install" hx-target="#store-app-{{$app.ID}}" hx-swap="outerHTML"><button class="button primary small">Start</button></form>
+      {{end}}
+      {{if $app.BundleSlug}}<a class="button small" href="/improve/{{$app.BundleSlug}}">Fix</a>{{end}}
+      <form hx-post="/store/apps/{{$app.ID}}/remove" hx-target="#store-app-{{$app.ID}}" hx-swap="outerHTML" hx-confirm="Remove {{$app.Name}} from your store? The running copy is stopped too; the project is kept and can be republished."><button class="button danger small">Remove</button></form>
+    </div>
+  </footer>
+</article>
+{{end}}

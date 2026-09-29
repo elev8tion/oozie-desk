@@ -1,0 +1,42 @@
+{{define "layouts/base"}}
+<!doctype html>
+<html lang="en" data-theme="{{with .Theme}}{{.}}{{else}}system{{end}}" data-style="{{with .Style}}{{.}}{{else}}graphite{{end}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/static/css/app.css?v={{cssVersion}}">
+  <script src="/static/js/htmx.min.js"></script>
+</head>
+<body>
+  <div class="app-frame">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="/"><span class="dot"></span><strong>oozie</strong><small>one page</small></a>
+      <nav class="nav-list">
+        <a href="/">Make</a>
+        <a href="/store">Pages</a>
+        <a href="/settings">Settings</a>
+      </nav>
+      <details class="nav-more">
+        <summary>More</summary>
+        <nav class="nav-list">
+          <a href="/projects">Projects</a>
+          <a href="/wishes">Wishes</a>
+          <a href="/recipes">Recipes</a>
+          <a href="/publishing/jobs">Jobs</a>
+        </nav>
+      </details>
+      <div class="sidebar-card">
+        <span class="label">Local mode</span>
+        <p>Describe a page. oozie builds it here and opens it on localhost. Fix it from the page itself.</p>
+      </div>
+    </aside>
+    <main class="main-panel" id="main-panel">
+      {{include .Content .}}
+    </main>
+  </div>
+  <div id="toast-region" class="toast-region" aria-live="polite">{{if .Flash}}<div class="toast">{{.Flash}}</div>{{end}}</div>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
+{{end}}

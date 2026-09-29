@@ -1,0 +1,10 @@
+{{define "partials/projects/row"}}
+{{$p := index .Data "Project"}}
+<tr>
+  <td><a class="strong" href="/projects/{{$p.ID}}">{{$p.Name}}</a></td>
+  <td><span class="badge">{{$p.Status}}</span></td>
+  <td class="muted">{{$p.ProjectPathDisplay}}</td>
+  <td>{{if $p.Trusted}}<span class="badge good">trusted</span>{{else}}<span class="badge warn" title="Every write/edit/bash call needs approval — open the project to trust it">confirm mode</span>{{end}}</td>
+  <td class="row-actions"><a class="button small" href="/projects/{{$p.ID}}/agent">Agent</a><a class="button small" href="/projects/{{$p.ID}}/publish">Publish</a><form hx-post="/projects/{{$p.ID}}/archive" hx-target="#project-list" hx-confirm="Archive {{$p.Name}}?"><button class="button small">Archive</button></form><form hx-post="/projects/{{$p.ID}}/delete" hx-target="#project-list" hx-confirm="Permanently delete {{$p.Name}}? This removes its chat history, drafts, jobs, and any published/installed app. Files in {{$p.ProjectPathDisplay}} are kept on disk."><button class="button danger small">Delete</button></form></td>
+</tr>
+{{end}}
