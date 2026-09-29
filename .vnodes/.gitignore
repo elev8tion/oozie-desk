@@ -4,3 +4,5 @@ index.db-wal
 logs/
 daemon.pid
 memory.db
+memory.db-shm
+memory.db-wal
