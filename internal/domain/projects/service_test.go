@@ -760,7 +760,18 @@ func TestMakeOpensWhenAgentFinishes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Phase != "open" || st.URL == "" || !tcpUp(st.URL) {
-		t.Fatalf("status = %+v, want an open listening page", st)
+	if st.Phase != "open" || !strings.HasPrefix(st.URL, "/run/") {
+		t.Fatalf("status = %+v, want open at /run/<id>", st)
+	}
+	appID, err := s.repo.StoreAppIDForProject(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := s.GetStoreApp(ctx, appID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.PublicURL == "" || !tcpUp(app.PublicURL) {
+		t.Fatalf("app not listening at %q", app.PublicURL)
 	}
 }

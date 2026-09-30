@@ -393,7 +393,7 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 		Workdir:      workdir,
 		Model:        model,
 		PiSessionID:  session.PiSessionID,
-		SystemPrompt: oozieSystemPrompt(project, workdir, s.improveURL(ctx, project), s.repo.IndustryPack(ctx)),
+		SystemPrompt: oozieSystemPrompt(project, workdir, s.baseURL, s.improveURL(ctx, project), s.repo.IndustryPack(ctx)),
 		Trusted:      project.Trusted,
 	}
 	if err := s.agent.Prompt(opts, requestID, wrapModeMessage(mode, message)); err != nil {
@@ -752,7 +752,7 @@ func newPiSessionID(projectID int64) string {
 	return fmt.Sprintf("oozie-p%d-%s", projectID, hex.EncodeToString(buf))
 }
 
-func oozieSystemPrompt(p Project, workdir, improveURL, industryPack string) string {
+func oozieSystemPrompt(p Project, workdir, deskURL, improveURL, industryPack string) string {
 	prompt := fmt.Sprintf(`You are running inside oozie, a local desk whose purpose is building small personal tools, as the agent for the project %q (working directory: %s).
 
 How to behave in oozie:
@@ -766,7 +766,8 @@ Producing web apps (oozie's publish pipeline):
 - When the user asks for an app, scaffold a Go module at the project root: go.mod plus a main package in main.go (or cmd/app). Prefer the standard library.
 - The server MUST listen on the ADDR environment variable (host:port, for example 127.0.0.1:8091). If ADDR is empty, listen on 127.0.0.1:$PORT. Do not hardcode a port.
 - GET / must return HTML with status 200. Data lives in a file under the working directory if the app needs storage (SQLite is fine; modernc.org/sqlite needs no C compiler).
-- Put a footer link "Improve this app" to %q when that URL is non-empty. That page files a request back to you. Do not build any other feedback system.
+- Every page MUST include a footer link labeled "Back to desk" to %q (also available as $OOZIE_DESK_URL at runtime), with target="_top" so it escapes any desk iframe shell. The user always needs a way back to the desk from the tool — do not omit this.
+- Also put a footer link "Improve this app" (or "Fix") to %q when that URL is non-empty. That page files a request back to you. Do not build any other feedback system.
 - If OOZIE_BEACON_URL is set, a page view may GET it (failure is fine). It records that the app was opened.
 - Verify with 'go build -o /tmp/app .' before declaring the work done. oozie then builds the same way and opens the page. No Swift, no Xcode, no .app bundle, no icon, no screenshot pass.
 
@@ -774,7 +775,7 @@ Design:
 - Build one local tool as a single page, not a suite. The page itself is the preview.
 - The project root contains TASTE.md — the user's personal design voice. Read it before any UI work; its rules override DESIGN.md wherever they conflict.
 - The project root contains DESIGN.md — read it before any UI work and follow it.
-`, p.Name, workdir, improveURL)
+`, p.Name, workdir, deskURL, improveURL)
 	if strings.TrimSpace(industryPack) != "" {
 		prompt += "\nIndustry pack " + strings.TrimSpace(industryPack) + ":\nFollow that pack's terms when they do not conflict with the contract above. The pack does not change who can connect or where the tool runs.\n"
 	}

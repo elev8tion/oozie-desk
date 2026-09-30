@@ -5,7 +5,7 @@
   <h1>{{$app.Name}}</h1>
   {{if index .Data "Sent"}}
   <p class="lead">On it. The same page comes back when the fix is running.</p>
-  <div class="actions">{{if $app.PublicURL}}<a class="button primary" href="{{$app.PublicURL}}">Back to the tool</a>{{end}}{{if $app.ProjectID}}<a class="button" href="/projects/{{$app.ProjectID}}/agent">Watch the agent</a>{{end}}</div>
+  <div class="actions">{{if $app.ID}}<a class="button primary" href="/run/{{$app.ID}}">Back to the tool</a>{{else if $app.PublicURL}}<a class="button primary" href="{{$app.PublicURL}}">Back to the tool</a>{{end}}{{if $app.ProjectID}}<a class="button" href="/projects/{{$app.ProjectID}}/agent">Watch the agent</a>{{end}}</div>
   {{else}}
   <p class="muted">One sentence. oozie rebuilds the tool and opens the same URL.</p>
   {{if index .Data "Error"}}<div class="notice error">{{index .Data "Error"}}</div>{{end}}

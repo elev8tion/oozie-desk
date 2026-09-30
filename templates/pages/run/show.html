@@ -1,0 +1,16 @@
+{{define "pages/run/show-content"}}
+{{$app := index .Data "App"}}
+{{$url := index .Data "URL"}}
+<section class="tool-run">
+  <header class="tool-run-bar">
+    <a class="button small" href="/">Back to desk</a>
+    <strong class="tool-run-name">{{$app.Name}}</strong>
+    <span class="muted tool-run-url">{{$url}}</span>
+    <div class="actions">
+      {{if $app.BundleSlug}}<a class="button small" href="/improve/{{$app.BundleSlug}}">Fix</a>{{end}}
+      <a class="button small" href="{{$url}}" target="_blank" rel="noopener">Open alone</a>
+    </div>
+  </header>
+  <iframe class="tool-run-frame" src="{{$url}}" title="{{$app.Name}}"></iframe>
+</section>
+{{end}}

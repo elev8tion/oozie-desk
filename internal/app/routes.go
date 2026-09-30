@@ -72,6 +72,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /store", h.Store)
 	mux.HandleFunc("GET /store/apps/{id}", h.StoreApp)
 	mux.HandleFunc("POST /store/apps/{id}/install", h.InstallApp)
+	mux.HandleFunc("GET /run/{id}", h.RunApp)
 	mux.HandleFunc("POST /store/apps/{id}/open", h.OpenApp)
 	mux.HandleFunc("POST /store/apps/{id}/uninstall", h.UninstallApp)
 	mux.HandleFunc("POST /store/apps/{id}/remove", h.RemoveStoreApp)

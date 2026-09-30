@@ -72,7 +72,8 @@ func (s *Service) MakeStatus(ctx context.Context, projectID int64) (MakeView, er
 	if appID, err := s.repo.StoreAppIDForProject(ctx, projectID); err == nil && appID != 0 {
 		if app, err := s.repo.GetStoreApp(ctx, appID); err == nil && appIsOurs(app) {
 			view.Phase = "open"
-			view.URL = app.PublicURL
+			// Open inside the desk chrome so Back to desk is always available.
+			view.URL = fmt.Sprintf("/run/%d", app.ID)
 			return view, nil
 		}
 	}
@@ -126,7 +127,8 @@ Contract:
 - Go module at the project root (go.mod and main.go). Prefer the standard library.
 - Listen on the ADDR environment variable. If ADDR is empty, listen on 127.0.0.1:$PORT. Never hardcode a port.
 - GET / returns HTML with status 200.
-- Put a footer link labeled "Fix" to the improve URL from the system prompt, when that URL is non-empty.
+- Every page has a footer with a "Back to desk" link (target="_top") to the desk URL from the system prompt (or $OOZIE_DESK_URL). The user must always be able to return to the desk from the tool.
+- Also put a footer link labeled "Fix" to the improve URL from the system prompt, when that URL is non-empty.
 - No icon, no screenshot, no visual-review pass. The page itself is the preview.
 - Verify with: go build -o /tmp/app .
 

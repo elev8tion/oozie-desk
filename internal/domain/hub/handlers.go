@@ -126,7 +126,7 @@ func (h *Handlers) SidebarFragment(w http.ResponseWriter, r *http.Request) {
 			if app.PublicURL == "" {
 				continue
 			}
-			bar.Tools = append(bar.Tools, SidebarTool{Name: app.Name, URL: app.PublicURL})
+			bar.Tools = append(bar.Tools, SidebarTool{Name: app.Name, URL: "/run/" + strconv.FormatInt(app.ID, 10)})
 		}
 	}
 	h.renderer.HTML(w, 200, "partials/desk/sidebar", render.ViewData{Data: map[string]any{"Sidebar": bar}})

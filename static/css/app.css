@@ -185,3 +185,9 @@ td.row-actions{flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap;gap:
 .sidebar-tools{gap:6px;margin-top:10px}
 .sidebar-tools a{font-size:14px}
 .badge.share{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.tool-run{display:flex;flex-direction:column;gap:10px;min-height:calc(100vh - 44px);margin:-4px}
+.tool-run-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tool-run-name{font-size:15px}
+.tool-run-url{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42ch}
+.tool-run-bar .actions{margin-left:auto}
+.tool-run-frame{flex:1;width:100%;min-height:480px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow)}

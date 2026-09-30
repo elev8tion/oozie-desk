@@ -13,8 +13,12 @@ unless TASTE.md or the user overrides them.
   welcome for in-page updates; do not add a JavaScript framework.
 - Prefer the standard library. Add a dependency only when the app cannot
   work without it.
-- A footer link labeled "Improve this app" points at `$OOZIE_IMPROVE_URL`
-  when that variable is set.
+- A footer always includes a link labeled "Back to desk" pointing at
+  `$OOZIE_DESK_URL` when that variable is set (the oozie home page). Use
+  `target="_top"` so the link leaves an iframe shell if one is wrapping the
+  tool. Every tool must let the user return to the desk without closing the tab.
+- A second footer link labeled "Improve this app" (or "Fix") points at
+  `$OOZIE_IMPROVE_URL` when that variable is set.
 
 ## Layout
 - A clear page title, one primary action, and content that does not sit

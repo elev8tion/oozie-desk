@@ -70,6 +70,26 @@ func (h *Handlers) MakeWait(w http.ResponseWriter, r *http.Request) {
 	h.page(w, r, st.Name+" · oozie", "pages/make/wait-content", map[string]any{"Status": st})
 }
 
+// RunApp starts the tool if needed and shows it inside the desk chrome so
+// Back to desk is always one click away, even when the tool itself forgot a link.
+func (h *Handlers) RunApp(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	url, err := h.service.OpenApp(r.Context(), id)
+	if err != nil {
+		h.errorPage(w, r, 500, err.Error())
+		return
+	}
+	app, err := h.service.GetStoreApp(r.Context(), id)
+	if err != nil {
+		h.errorPage(w, r, 404, "That tool is not on this desk.")
+		return
+	}
+	h.page(w, r, app.Name+" · oozie", "pages/run/show-content", map[string]any{"App": app, "URL": url})
+}
+
 func (h *Handlers) MakeStatus(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.pathID(w, r, "id")
 	if !ok {
@@ -484,12 +504,13 @@ func (h *Handlers) OpenApp(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	runURL := "/run/" + strconv.FormatInt(id, 10)
 	url, err := h.service.OpenApp(r.Context(), id)
 	flash, errMsg := "Running at "+url+".", ""
 	if err != nil {
 		flash, errMsg = "", err.Error()
 	} else if r.Header.Get("HX-Request") == "true" {
-		w.Header().Set("HX-Redirect", url)
+		w.Header().Set("HX-Redirect", runURL)
 	}
 	app, _ := h.service.GetStoreApp(r.Context(), id)
 	h.renderer.HTML(w, 200, "partials/store/row", render.ViewData{Flash: flash, Err: errMsg, Data: map[string]any{"App": app}})

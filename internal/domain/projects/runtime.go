@@ -68,6 +68,7 @@ func (s *Service) startOn(app StoreApp, port int) (string, int, bool, error) {
 	cmd.Env = overrideEnv(os.Environ(), map[string]string{
 		"ADDR":              addr,
 		"PORT":              strconv.Itoa(port),
+		"OOZIE_DESK_URL":    s.baseURL,
 		"OOZIE_IMPROVE_URL": s.baseURL + "/improve/" + app.BundleSlug,
 		"OOZIE_BEACON_URL":  s.baseURL + "/api/beacon/" + app.BundleSlug,
 	})
