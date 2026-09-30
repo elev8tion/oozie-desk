@@ -8,7 +8,7 @@
   {{if .Err}}<p class="danger">{{.Err}}</p>{{end}}
   {{if $hit}}<p><span class="badge share">Shared</span></p>{{else}}<p><span class="badge">Not shared</span></p>{{end}}
   {{if not $peers}}
-    <p class="muted">Invite someone from People. A link does nothing until you turn it on, and only an invited desk can open it.</p>
+    <p class="muted">Invite someone from People. A link does nothing until you turn it on, and only an invited desk can open it. A share sends the recipe — their desk rebuilds the tool empty. Your data stays here.</p>
   {{else}}
     <form method="post" action="/store/apps/{{$appID}}/share" class="form-stack">
       <label>Send to
@@ -23,7 +23,7 @@
   {{range $grants}}
     {{if eq .AppID $appID}}
     <p class="share-link">{{.Link}}</p>
-    <p class="muted">On for {{.PeerName}}. They can also paste this link. Turn it off and it stops working.</p>
+    <p class="muted">On for {{.PeerName}}. They get the recipe and rebuild on their desk — not your records. Turn it off and the link stops working.</p>
     <form method="post" action="/store/apps/{{$appID}}/share/stop">
       <input type="hidden" name="peer_id" value="{{.PeerID}}">
       <button class="button small">Turn off</button>

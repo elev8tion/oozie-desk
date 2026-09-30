@@ -599,7 +599,7 @@ func (s *Service) RemixApp(ctx context.Context, appID int64, mutation string) (P
 		return remix, ErrValidation{"Copied project incompletely: " + err.Error()}
 	}
 	s.appendTasteSignal("remix "+app.Name, mutation)
-	msg := fmt.Sprintf("This project is a remix of %q — its full source was copied here as the starting point.\n\nMutation requested by the user:\n\n%s\n\nApply the mutation: rename the app appropriately (module path, page title, and any user-visible names), implement the change, keep what still serves the new purpose, delete what doesn't, and verify with 'go build -o /tmp/remix .'. The app must keep listening on $ADDR.", app.Name, mutation)
+	msg := fmt.Sprintf("This project is a remix of %q — its source was copied here as the starting point (runtime data/ and databases were left behind so this desk starts empty).\n\nMutation requested by the user:\n\n%s\n\nApply the mutation: rename the app appropriately (module path, page title, and any user-visible names), implement the change, keep what still serves the new purpose, delete what doesn't, and verify with 'go build -o /tmp/remix .'. Keep durable records under data/ only. The app must keep listening on $ADDR.", app.Name, mutation)
 	if _, err := s.sendAgentMessage(ctx, remix.ID, "build", msg); err != nil {
 		return remix, err
 	}
@@ -611,9 +611,11 @@ func remixName(base string) string {
 }
 
 // copyProjectTree copies a project's source, skipping build products,
-// bundles, VCS internals, and review screenshots.
+// bundles, VCS internals, review screenshots, and runtime usage data.
+// data/ and database files stay with the source desk so a remix never
+// inherits another person's records.
 func copyProjectTree(src, dst string) error {
-	skip := map[string]bool{".build": true, "dist": true, ".git": true}
+	skipDir := map[string]bool{".build": true, "dist": true, ".git": true, toolDataDirName: true}
 	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -622,8 +624,9 @@ func copyProjectTree(src, dst string) error {
 		if err != nil || rel == "." {
 			return err
 		}
+		base := filepath.Base(p)
 		top := strings.Split(rel, string(filepath.Separator))[0]
-		if skip[top] || filepath.Base(p) == "review.png" {
+		if skipDir[top] || base == "review.png" || isToolDataFile(base) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -643,6 +646,22 @@ func copyProjectTree(src, dst string) error {
 		}
 		return os.WriteFile(dest, body, info.Mode().Perm())
 	})
+}
+
+// isToolDataFile reports names that hold runtime usage data and must not
+// travel with remix or share artifacts.
+func isToolDataFile(name string) bool {
+	lower := strings.ToLower(name)
+	switch lower {
+	case ".env", ".env.local":
+		return true
+	}
+	for _, suf := range []string{".db", ".db-wal", ".db-shm", ".sqlite", ".sqlite3", ".sqlite-wal", ".sqlite-shm"} {
+		if strings.HasSuffix(lower, suf) {
+			return true
+		}
+	}
+	return false
 }
 
 // AppBySlug resolves a published app from its improve/beacon slug.
@@ -765,7 +784,8 @@ How to behave in oozie:
 Producing web apps (oozie's publish pipeline):
 - When the user asks for an app, scaffold a Go module at the project root: go.mod plus a main package in main.go (or cmd/app). Prefer the standard library.
 - The server MUST listen on the ADDR environment variable (host:port, for example 127.0.0.1:8091). If ADDR is empty, listen on 127.0.0.1:$PORT. Do not hardcode a port.
-- GET / must return HTML with status 200. Data lives in a file under the working directory if the app needs storage (SQLite is fine; modernc.org/sqlite needs no C compiler).
+- GET / must return HTML with status 200.
+- Data isolation: if the app needs storage, keep durable user records only under a data/ directory in the working directory (create it on first write). Prefer SQLite there (modernc.org/sqlite needs no C compiler). Prefer $OOZIE_DATA_DIR when set — it points at that data/ folder. Never hardcode personal records, real usage rows, API keys, or another person's data into source files. A share sends the recipe only; data/ stays on this desk.
 - Every page MUST include a footer link labeled "Back to desk" to %q (also available as $OOZIE_DESK_URL at runtime), with target="_top" so it escapes any desk iframe shell. The user always needs a way back to the desk from the tool — do not omit this.
 - Also put a footer link "Improve this app" (or "Fix") to %q when that URL is non-empty. That page files a request back to you. Do not build any other feedback system.
 - If OOZIE_BEACON_URL is set, a page view may GET it (failure is fine). It records that the app was opened.

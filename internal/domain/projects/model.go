@@ -193,6 +193,23 @@ type Wish struct {
 	BuiltAt   *time.Time
 }
 
+// RecipeDraft is a store-link proposal waiting for Accept / Reject / Edit.
+// Status: pending | accepted | rejected.
+type RecipeDraft struct {
+	ID               int64
+	SourceURL        string
+	SourceKind       string // chrome | appstore | play
+	Name             string
+	Headline         string
+	StoreDescription string
+	Plan             string // natural-language "what will be built"
+	RecipeJSON       string
+	Status           string
+	ProjectID        *int64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type Dashboard struct {
 	Projects  []Project
 	StoreApps []StoreApp

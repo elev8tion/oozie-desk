@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,12 +66,15 @@ func (s *Service) startOn(app StoreApp, port int) (string, int, bool, error) {
 			}
 		}
 	}
+	dataDir := filepath.Join(cmd.Dir, toolDataDirName)
+	_ = os.MkdirAll(dataDir, 0o755)
 	cmd.Env = overrideEnv(os.Environ(), map[string]string{
 		"ADDR":              addr,
 		"PORT":              strconv.Itoa(port),
 		"OOZIE_DESK_URL":    s.baseURL,
 		"OOZIE_IMPROVE_URL": s.baseURL + "/improve/" + app.BundleSlug,
 		"OOZIE_BEACON_URL":  s.baseURL + "/api/beacon/" + app.BundleSlug,
+		"OOZIE_DATA_DIR":    dataDir,
 	})
 	logTail := &tailBuf{max: 4000}
 	cmd.Stdout = logTail

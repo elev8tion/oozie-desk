@@ -327,6 +327,9 @@ func TestRemixCopiesSource(t *testing.T) {
 	writeTestFile(t, filepath.Join(srcDir, "Sources", "main.swift"), "print(1)")
 	writeTestFile(t, filepath.Join(srcDir, ".build", "junk"), "x")
 	writeTestFile(t, filepath.Join(srcDir, "dist", "junk"), "x")
+	writeTestFile(t, filepath.Join(srcDir, "data", "app.db"), "CREATOR-SECRET-ROWS")
+	writeTestFile(t, filepath.Join(srcDir, "notes.sqlite"), "MORE-SECRET")
+	writeTestFile(t, filepath.Join(srcDir, ".env"), "TOKEN=secret")
 
 	if _, err := s.RemixApp(ctx, id, ""); err == nil {
 		t.Fatal("empty mutation must be rejected")
@@ -358,6 +361,15 @@ func TestRemixCopiesSource(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dstDir, "dist")); err == nil {
 		t.Error("dist must not be copied")
 	}
+	if _, err := os.Stat(filepath.Join(dstDir, "data")); err == nil {
+		t.Error("data/ must not be copied — creator usage stays on the source desk")
+	}
+	if _, err := os.Stat(filepath.Join(dstDir, "notes.sqlite")); err == nil {
+		t.Error("*.sqlite must not be copied")
+	}
+	if _, err := os.Stat(filepath.Join(dstDir, ".env")); err == nil {
+		t.Error(".env must not be copied")
+	}
 }
 
 func writeTestFile(t *testing.T, path, content string) {
@@ -382,6 +394,11 @@ func TestRecipeRoundTrip(t *testing.T) {
 	_, _ = s.repo.CreateAgentRequest(ctx, session.ID, "build", "build me a timer")
 	_, _ = s.repo.CreateAgentRequest(ctx, session.ID, "build", "make it purple")
 
+	// Plant creator usage data beside the project. Export must ignore it.
+	secret := "CREATOR-PRIVATE-FEEDING-LOG-9f3a"
+	writeTestFile(t, filepath.Join(dir, "data", "app.db"), secret)
+	writeTestFile(t, filepath.Join(dir, "usage.db"), secret)
+
 	rec, err := s.ExportRecipe(ctx, id)
 	if err != nil {
 		t.Fatal(err)
@@ -389,10 +406,19 @@ func TestRecipeRoundTrip(t *testing.T) {
 	if rec.Kind != "oozie-recipe/v1" || len(rec.Prompts) != 2 || rec.Prompts[1] != "make it purple" {
 		t.Fatalf("recipe = %+v", rec)
 	}
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), secret) || strings.Contains(string(raw), "CREATOR-PRIVATE") {
+		t.Fatalf("recipe leaked creator usage data: %s", raw)
+	}
+	if strings.Contains(rec.Design, secret) {
+		t.Fatal("design field carried usage data")
+	}
 
 	// Import: agent send fails without pi, but the project must exist and
 	// carry the recipe's identity.
-	raw, _ := json.Marshal(rec)
 	imported, err := s.ImportRecipe(ctx, string(raw))
 	if _, ok := err.(ErrValidation); !ok {
 		t.Fatalf("expected agent-unavailable validation error, got %v", err)

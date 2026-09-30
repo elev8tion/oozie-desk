@@ -20,6 +20,14 @@ unless TASTE.md or the user overrides them.
 - A second footer link labeled "Improve this app" (or "Fix") points at
   `$OOZIE_IMPROVE_URL` when that variable is set.
 
+## Data
+- Durable user records live only under `data/` in the project root (or
+  `$OOZIE_DATA_DIR` when set). Create that directory on first write.
+- SQLite files, uploads, and caches belong there — never in source, never
+  embedded as sample rows that look like real usage.
+- Sharing sends the recipe (prompts + design), not `data/`. Another desk
+  rebuilds an empty tool. Do not hardcode the author's personal data.
+
 ## Layout
 - A clear page title, one primary action, and content that does not sit
   flush against the window edge. Use an 8px spacing scale (8/16/24/32).

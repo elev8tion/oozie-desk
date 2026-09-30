@@ -1,0 +1,49 @@
+{{define "pages/recipes/draft-content"}}
+{{$d := index .Data "Draft"}}
+<section class="toolbar">
+  <div>
+    <p class="eyebrow">Recipe draft · {{index .Data "SourceKind"}}</p>
+    <h1>{{$d.Name}}</h1>
+    <p class="muted">Review what will be built. <strong>Accept</strong> starts the agent with this plan. <strong>Reject</strong> discards it so you can paste another link. <strong>Edit</strong> lets you change the plan; the desk adapts the recipe and then builds.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="/recipes">Another link</a>
+  </div>
+</section>
+{{if index .Data "Error"}}<div class="notice error">{{index .Data "Error"}}</div>{{end}}
+
+<div class="panel form-stack">
+  <p class="eyebrow">Source</p>
+  <p><a href="{{$d.SourceURL}}" rel="noopener noreferrer" target="_blank">{{$d.SourceURL}}</a></p>
+  {{if $d.StoreDescription}}
+  <p class="eyebrow">Store description</p>
+  <p class="muted">{{$d.StoreDescription}}</p>
+  {{end}}
+</div>
+
+<div class="panel form-stack" style="margin-top:1rem">
+  <p class="eyebrow">What will be built</p>
+  <pre class="plan-preview" style="white-space:pre-wrap;font-family:inherit;margin:0 0 1rem 0">{{$d.Plan}}</pre>
+  <div class="actions" style="flex-wrap:wrap;gap:0.5rem">
+    <form method="post" action="/recipes/drafts/{{$d.ID}}/accept" style="display:inline">
+      <button class="button primary">Accept &amp; build</button>
+    </form>
+    <form method="post" action="/recipes/drafts/{{$d.ID}}/reject" style="display:inline">
+      <button class="button">Reject</button>
+    </form>
+  </div>
+</div>
+
+<div class="panel form-stack" style="margin-top:1rem">
+  <p class="eyebrow">Edit the plan</p>
+  <form method="post" action="/recipes/drafts/{{$d.ID}}/edit" class="form-stack">
+    <label for="plan">Change the natural-language plan. Saving adapts the recipe to your edits and starts the build.</label>
+    <textarea id="plan" name="plan" rows="14" required>{{$d.Plan}}</textarea>
+    <div class="actions">
+      <button class="button primary">Save edits &amp; build</button>
+    </div>
+  </form>
+</div>
+{{end}}
+
+{{define "pages/recipes/draft-placeholder"}}<div></div>{{end}}

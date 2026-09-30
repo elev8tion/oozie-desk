@@ -12,7 +12,7 @@ This is a copy of the Mac factory. The original at `/Users/kc/oozie` is unchange
 4. **Back** — the run bar always has "Back to desk". New tools also footer-link `OOZIE_DESK_URL` so a bare localhost tab can return home.
 5. **Fix** — a second footer link returns to oozie with another sentence. Remix copies a working tool into a new one.
 
-People is invitation-only. Connect stays off until you turn it on, and then it listens on a private address, not on the factory port. A share link does nothing until its owner turns it on. The other desk imports the recipe and builds the tool there.
+People is invitation-only. Connect stays off until you turn it on, and then it listens on a private address, not on the factory port. A share link does nothing until its owner turns it on. The other desk imports the recipe and builds the tool there — empty. Runtime records live under each tool's `data/` (`OOZIE_DATA_DIR`); remix and share never copy that folder or `*.db` files.
 
 Projects, wishes, recipes, and the job list stay under More. They are not the way in.
 
@@ -22,7 +22,7 @@ Projects, wishes, recipes, and the job list stay under More. They are not the wa
 - **Fix** — published apps can link to `/improve/<slug>`; a request there becomes an agent build, then oozie republishes and restarts the app
 - **Launch pings** — an app may GET `/api/beacon/<slug>` so the store shows usage
 - **Remix** — fork a store app's source into a new project with a mutation prompt
-- **Recipes** — export and import an app as prompts plus design notes
+- **Recipes** — paste a Chrome Web Store, App Store, or Play Store link; review the drafted plan (Accept / Reject / Edit); export still downloads prompts plus design notes
 - **Disposable apps** — publish with a TTL; the hourly reaper stops and delists them
 - **Wishes** — ideas the nightly fairy can build and publish
 - **Taste** — `TASTE.md` in Settings, copied into every project

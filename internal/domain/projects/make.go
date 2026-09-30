@@ -127,6 +127,7 @@ Contract:
 - Go module at the project root (go.mod and main.go). Prefer the standard library.
 - Listen on the ADDR environment variable. If ADDR is empty, listen on 127.0.0.1:$PORT. Never hardcode a port.
 - GET / returns HTML with status 200.
+- If the tool stores anything the user enters, keep it under data/ (or $OOZIE_DATA_DIR). Never bake personal records into source. Each desk keeps its own data when the recipe is shared.
 - Every page has a footer with a "Back to desk" link (target="_top") to the desk URL from the system prompt (or $OOZIE_DESK_URL). The user must always be able to return to the desk from the tool.
 - Also put a footer link labeled "Fix" to the improve URL from the system prompt, when that URL is non-empty.
 - No icon, no screenshot, no visual-review pass. The page itself is the preview.

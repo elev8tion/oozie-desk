@@ -231,7 +231,8 @@ func (s *Service) Peers(ctx context.Context) ([]Peer, error) {
 }
 
 // ActivateShare turns a link on for one invited peer, or every peer when
-// peerID is 0. The payload is a recipe. The author's database is not sent.
+// peerID is 0. The payload is a recipe (prompts + design). The author's
+// tool data/ directory, databases, and usage records are never sent.
 func (s *Service) ActivateShare(ctx context.Context, appID, peerID int64) error {
 	if s.Addr() == "" {
 		if _, err := s.Connect(ctx); err != nil {

@@ -739,3 +739,59 @@ func (r *Repo) SweepStaleWishes(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE wishes SET status='failed', error='oozie quit while this wish was building — set it back to pending or build it now' WHERE status='building'`)
 	return err
 }
+
+func (r *Repo) CreateRecipeDraft(ctx context.Context, d RecipeDraft) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `INSERT INTO recipe_drafts
+		(source_url, source_kind, name, headline, store_description, plan, recipe_json, status)
+		VALUES (?,?,?,?,?,?,?,?)`,
+		d.SourceURL, d.SourceKind, d.Name, d.Headline, d.StoreDescription, d.Plan, d.RecipeJSON, d.Status)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (r *Repo) GetRecipeDraft(ctx context.Context, id int64) (RecipeDraft, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT id, source_url, source_kind, name, headline, store_description,
+		plan, recipe_json, status, project_id, created_at, updated_at FROM recipe_drafts WHERE id=?`, id)
+	return scanRecipeDraft(row)
+}
+
+func (r *Repo) UpdateRecipeDraftPlan(ctx context.Context, id int64, plan, recipeJSON string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE recipe_drafts SET plan=?, recipe_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'`,
+		plan, recipeJSON, id)
+	return err
+}
+
+func (r *Repo) SettleRecipeDraft(ctx context.Context, id int64, status string, projectID *int64) error {
+	var pid any
+	if projectID != nil {
+		pid = *projectID
+	}
+	_, err := r.db.ExecContext(ctx, `UPDATE recipe_drafts SET status=?, project_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+		status, pid, id)
+	return err
+}
+
+func scanRecipeDraft(row rowScanner) (RecipeDraft, error) {
+	var d RecipeDraft
+	var pid sql.NullInt64
+	var created, updated string
+	if err := row.Scan(&d.ID, &d.SourceURL, &d.SourceKind, &d.Name, &d.Headline, &d.StoreDescription,
+		&d.Plan, &d.RecipeJSON, &d.Status, &pid, &created, &updated); err != nil {
+		if err == sql.ErrNoRows {
+			return RecipeDraft{}, ErrValidation{"That recipe draft is gone."}
+		}
+		return RecipeDraft{}, err
+	}
+	if pid.Valid {
+		d.ProjectID = &pid.Int64
+	}
+	if t, err := parseSQLiteTime(created); err == nil {
+		d.CreatedAt = t
+	}
+	if t, err := parseSQLiteTime(updated); err == nil {
+		d.UpdatedAt = t
+	}
+	return d, nil
+}

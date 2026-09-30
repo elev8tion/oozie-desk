@@ -59,6 +59,13 @@ func TestInviteShareAndRevoke(t *testing.T) {
 	if !strings.Contains(raw, "sourdough") || strings.Contains(raw, "icon_png") {
 		t.Fatalf("share payload = %s", raw)
 	}
+	// Share is recipe JSON only — never store runtime metadata or a binary path.
+	if strings.Contains(raw, "artifact") || strings.Contains(raw, "runtime_pid") || strings.Contains(raw, "public_url") {
+		t.Fatalf("share payload looked like store metadata: %s", raw)
+	}
+	if !strings.Contains(raw, "oozie-recipe/v1") || !strings.Contains(raw, "\"prompts\"") {
+		t.Fatalf("share payload missing recipe shape: %s", raw)
+	}
 	if err := author.StopShare(ctx, appID, peers[0].ID); err != nil {
 		t.Fatal(err)
 	}

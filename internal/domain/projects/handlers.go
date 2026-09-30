@@ -456,11 +456,98 @@ func (h *Handlers) ExportRecipe(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// ImportRecipePage is the Recipes hub: import a recipe, and export any
-// published app as one.
+// ImportRecipePage is the Recipes hub: paste a store link (or advanced JSON),
+// and export any published app as a recipe file.
 func (h *Handlers) ImportRecipePage(w http.ResponseWriter, r *http.Request) {
 	apps, _ := h.service.ListStoreApps(r.Context(), "", "")
-	h.page(w, r, "Recipes · oozie", "pages/recipes/import-content", map[string]any{"Apps": apps})
+	h.page(w, r, "Recipes · oozie", "pages/recipes/import-content", map[string]any{
+		"Apps":  apps,
+		"Error": r.URL.Query().Get("err"),
+		"Link":  r.URL.Query().Get("link"),
+		"Flash": r.URL.Query().Get("flash"),
+	})
+}
+
+// ProposeRecipeFromLink reads a Chrome / App Store / Play listing into a draft.
+func (h *Handlers) ProposeRecipeFromLink(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	link := r.FormValue("link")
+	draft, err := h.service.ProposeRecipeFromLink(r.Context(), link)
+	if err != nil {
+		http.Redirect(w, r, "/recipes?link="+url.QueryEscape(link)+"&err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/recipes/drafts/"+strconv.FormatInt(draft.ID, 10), http.StatusSeeOther)
+}
+
+// RecipeDraftPage shows the natural-language plan with Accept / Reject / Edit.
+func (h *Handlers) RecipeDraftPage(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	draft, err := h.service.GetRecipeDraft(r.Context(), id)
+	if err != nil {
+		h.errorPage(w, r, 404, err.Error())
+		return
+	}
+	if draft.Status != "pending" {
+		http.Redirect(w, r, "/recipes?flash="+url.QueryEscape("That draft was already "+draft.Status+"."), http.StatusSeeOther)
+		return
+	}
+	h.page(w, r, draft.Name+" · recipe", "pages/recipes/draft-content", map[string]any{
+		"Draft":      draft,
+		"SourceKind": sourceKindLabel(draft.SourceKind),
+		"Error":      r.URL.Query().Get("err"),
+	})
+}
+
+func (h *Handlers) AcceptRecipeDraft(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	project, err := h.service.AcceptRecipeDraft(r.Context(), id)
+	if project.ID != 0 {
+		// Project exists even when pi failed to start — land on the agent page.
+		http.Redirect(w, r, "/projects/"+strconv.FormatInt(project.ID, 10)+"/agent", http.StatusSeeOther)
+		return
+	}
+	if err != nil {
+		http.Redirect(w, r, "/recipes/drafts/"+strconv.FormatInt(id, 10)+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/recipes", http.StatusSeeOther)
+}
+
+func (h *Handlers) RejectRecipeDraft(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if err := h.service.RejectRecipeDraft(r.Context(), id); err != nil {
+		http.Redirect(w, r, "/recipes?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/recipes?flash="+url.QueryEscape("Draft discarded. Paste another store link when you're ready."), http.StatusSeeOther)
+}
+
+func (h *Handlers) EditRecipeDraft(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	_ = r.ParseForm()
+	project, err := h.service.EditRecipeDraft(r.Context(), id, r.FormValue("plan"))
+	if project.ID != 0 {
+		http.Redirect(w, r, "/projects/"+strconv.FormatInt(project.ID, 10)+"/agent", http.StatusSeeOther)
+		return
+	}
+	if err != nil {
+		http.Redirect(w, r, "/recipes/drafts/"+strconv.FormatInt(id, 10)+"?err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/recipes", http.StatusSeeOther)
 }
 
 func (h *Handlers) ImportRecipe(w http.ResponseWriter, r *http.Request) {

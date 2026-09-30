@@ -14,6 +14,11 @@ import (
 // A Recipe is an app shared as intent instead of a binary: the prompts
 // that grew it, its metadata, its design standard, and its icon. Another
 // oozie rebuilds it locally — adapted to that machine and that user.
+//
+// Isolation contract: a recipe never carries runtime usage data. Export
+// reads only agent prompts plus DESIGN.md and optional icon.png. It does
+// not open data/, *.db, logs, or any other file the tool wrote while the
+// author used it. The recipient rebuilds an empty tool on their desk.
 type Recipe struct {
 	Kind        string    `json:"kind"` // recipeKind
 	Name        string    `json:"name"`
@@ -27,7 +32,14 @@ type Recipe struct {
 
 const recipeKind = "oozie-recipe/v1"
 
+// toolDataDirName is the only place generated tools may keep durable
+// usage data. Share/remix/export paths skip it so one desk never receives
+// another desk's records.
+const toolDataDirName = "data"
+
 // ExportRecipe packages a published app as a shareable recipe.
+// Runtime databases and other usage files under the project workdir are
+// never read or attached.
 func (s *Service) ExportRecipe(ctx context.Context, appID int64) (Recipe, error) {
 	app, err := s.repo.GetStoreApp(ctx, appID)
 	if err != nil {
@@ -40,6 +52,7 @@ func (s *Service) ExportRecipe(ctx context.Context, appID int64) (Recipe, error)
 	if err != nil {
 		return Recipe{}, err
 	}
+	prompts = recipePrompts(prompts)
 	if len(prompts) == 0 {
 		return Recipe{}, ErrValidation{"This project has no agent history — a recipe would be empty."}
 	}
@@ -52,14 +65,142 @@ func (s *Service) ExportRecipe(ctx context.Context, appID int64) (Recipe, error)
 			if icon, err := os.ReadFile(filepath.Join(workdir, "icon.png")); err == nil && len(icon) < 4<<20 {
 				rec.IconPNG = base64.StdEncoding.EncodeToString(icon)
 			}
+			// Deliberately ignore workdir/data and any *.db — those are the
+			// author's private use of the tool, not part of the recipe.
 		}
 	}
 	return rec, nil
 }
 
+// recipePrompts keeps the genome (what to build) and drops empty lines.
+// It does not scrape project files; usage data never enters this list
+// unless a human typed it into a prompt themselves.
+func recipePrompts(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, p := range in {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// ProposeRecipeFromLink validates a Chrome / App Store / Play link, reads
+// the public listing, and stores a draft plan for Accept / Reject / Edit.
+// No project is created and the build agent is not started until Accept or Edit.
+func (s *Service) ProposeRecipeFromLink(ctx context.Context, rawURL string) (RecipeDraft, error) {
+	kind, canonical, err := classifyStoreURL(rawURL)
+	if err != nil {
+		return RecipeDraft{}, err
+	}
+	listing, err := fetchStoreListing(ctx, kind, canonical)
+	if err != nil {
+		return RecipeDraft{}, err
+	}
+	// Second-line guard: if the fetch path ever returned a non-store kind, refuse.
+	switch listing.Kind {
+	case storeKindChrome, storeKindAppStore, storeKindPlay:
+	default:
+		return RecipeDraft{}, ErrValidation{storeLinkRejectMsg}
+	}
+	plan := synthesizePlan(listing)
+	rec := recipeFromListing(listing, plan)
+	body, err := json.Marshal(rec)
+	if err != nil {
+		return RecipeDraft{}, ErrValidation{"Couldn't prepare that recipe draft."}
+	}
+	d := RecipeDraft{
+		SourceURL:        listing.URL,
+		SourceKind:       listing.Kind,
+		Name:             listing.Name,
+		Headline:         listing.Headline,
+		StoreDescription: listing.Description,
+		Plan:             plan,
+		RecipeJSON:       string(body),
+		Status:           "pending",
+	}
+	id, err := s.repo.CreateRecipeDraft(ctx, d)
+	if err != nil {
+		return RecipeDraft{}, err
+	}
+	return s.repo.GetRecipeDraft(ctx, id)
+}
+
+// GetRecipeDraft returns a draft by id.
+func (s *Service) GetRecipeDraft(ctx context.Context, id int64) (RecipeDraft, error) {
+	return s.repo.GetRecipeDraft(ctx, id)
+}
+
+// AcceptRecipeDraft starts the build from the draft's recipe and marks it accepted.
+func (s *Service) AcceptRecipeDraft(ctx context.Context, id int64) (Project, error) {
+	d, err := s.repo.GetRecipeDraft(ctx, id)
+	if err != nil {
+		return Project{}, err
+	}
+	if d.Status != "pending" {
+		return Project{}, ErrValidation{"That recipe draft is no longer waiting for a decision."}
+	}
+	project, err := s.importRecipeJSON(ctx, d.RecipeJSON)
+	if project.ID != 0 {
+		_ = s.repo.SettleRecipeDraft(ctx, id, "accepted", &project.ID)
+	}
+	return project, err
+}
+
+// RejectRecipeDraft discards a pending draft without building.
+func (s *Service) RejectRecipeDraft(ctx context.Context, id int64) error {
+	d, err := s.repo.GetRecipeDraft(ctx, id)
+	if err != nil {
+		return err
+	}
+	if d.Status != "pending" {
+		return ErrValidation{"That recipe draft is no longer waiting for a decision."}
+	}
+	return s.repo.SettleRecipeDraft(ctx, id, "rejected", nil)
+}
+
+// EditRecipeDraft replaces the natural-language plan, adapts the recipe
+// prompts to match, then starts the build.
+func (s *Service) EditRecipeDraft(ctx context.Context, id int64, plan string) (Project, error) {
+	plan = strings.TrimSpace(plan)
+	if plan == "" {
+		return Project{}, ErrValidation{"Edit the plan first, or Reject to discard it."}
+	}
+	d, err := s.repo.GetRecipeDraft(ctx, id)
+	if err != nil {
+		return Project{}, err
+	}
+	if d.Status != "pending" {
+		return Project{}, ErrValidation{"That recipe draft is no longer waiting for a decision."}
+	}
+	var rec Recipe
+	if err := json.Unmarshal([]byte(d.RecipeJSON), &rec); err != nil {
+		return Project{}, ErrValidation{"That draft's recipe is damaged — Reject it and try a new link."}
+	}
+	rec = recipeFromEditedPlan(rec, plan)
+	body, err := json.Marshal(rec)
+	if err != nil {
+		return Project{}, ErrValidation{"Couldn't adapt that recipe."}
+	}
+	if err := s.repo.UpdateRecipeDraftPlan(ctx, id, plan, string(body)); err != nil {
+		return Project{}, err
+	}
+	project, err := s.importRecipeJSON(ctx, string(body))
+	if project.ID != 0 {
+		_ = s.repo.SettleRecipeDraft(ctx, id, "accepted", &project.ID)
+	}
+	return project, err
+}
+
 // ImportRecipe creates a project from a recipe and asks the agent to
 // rebuild the app it describes.
 func (s *Service) ImportRecipe(ctx context.Context, raw string) (Project, error) {
+	return s.importRecipeJSON(ctx, raw)
+}
+
+func (s *Service) importRecipeJSON(ctx context.Context, raw string) (Project, error) {
 	var rec Recipe
 	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &rec); err != nil {
 		msg := "That doesn't parse as a recipe: " + err.Error()
@@ -104,7 +245,9 @@ func (s *Service) ImportRecipe(ctx context.Context, raw string) (Project, error)
 	for i, p := range rec.Prompts {
 		fmt.Fprintf(&b, "\n%d. %s\n", i+1, p)
 	}
-	b.WriteString("\nSynthesize these into one coherent app (later prompts refine earlier ones — don't replay them literally if they conflict). Verify with 'go build -o /tmp/app .' and keep the server listening on $ADDR.")
+	b.WriteString("\nSynthesize these into one coherent app (later prompts refine earlier ones — don't replay them literally if they conflict).")
+	b.WriteString("\n\nData isolation: this is a fresh desk. Start with empty local storage. Put any durable records under a data/ directory in the project root (create it on first write). Do not invent or hardcode the original author's personal records, sample rows that look like real usage, or anything that could have come from their database. Each desk owns its own data/.")
+	b.WriteString("\nVerify with 'go build -o /tmp/app .' and keep the server listening on $ADDR.")
 	if _, err := s.sendAgentMessage(ctx, project.ID, "build", b.String()); err != nil {
 		return project, err
 	}
