@@ -3,18 +3,37 @@
 <section class="hero panel" style="padding:22px">
   <p class="eyebrow">Fix</p>
   <h1>{{$app.Name}}</h1>
-  {{if index .Data "Sent"}}
-  <p class="lead">On it. The same page comes back when the fix is running.</p>
-  <div class="actions">{{if $app.ID}}<a class="button primary" href="/run/{{$app.ID}}">Back to the tool</a>{{else if $app.PublicURL}}<a class="button primary" href="{{$app.PublicURL}}">Back to the tool</a>{{end}}{{if $app.ProjectID}}<a class="button" href="/projects/{{$app.ProjectID}}/agent">Watch the agent</a>{{end}}</div>
-  {{else}}
   <p class="muted">One sentence. oozie rebuilds the tool and opens the same URL.</p>
   {{if index .Data "Error"}}<div class="notice error">{{index .Data "Error"}}</div>{{end}}
   <form method="post" action="/improve/{{$app.BundleSlug}}" class="form-stack">
     <label>What should be better?<textarea name="text" placeholder="The timer should flash red when it hits zero…" autofocus>{{index .Data "Text"}}</textarea></label>
-    <div class="actions"><button class="button primary">Send to the agent</button></div>
+    <div class="actions"><button class="button primary">Send to the agent</button>{{if $app.ID}}<a class="button" href="/run/{{$app.ID}}">Back to the tool</a>{{end}}</div>
   </form>
-  {{end}}
 </section>
+{{end}}
+
+{{define "pages/improve/wait-content"}}
+{{$st := index .Data "Status"}}
+<section class="make">
+  <p class="eyebrow">Fix · {{$st.Name}}</p>
+  <h1>Fixing your tool</h1>
+  <p class="muted">{{$st.Note}}</p>
+  {{template "partials/improve/status" .}}
+</section>
+{{end}}
+
+{{define "partials/improve/status"}}
+{{$st := index .Data "Status"}}
+<div id="improve-status" {{if eq $st.Phase "building"}}hx-get="/fragments/fix/{{$st.RequestID}}" hx-trigger="load delay:2s" hx-swap="outerHTML"{{end}}>
+  {{if eq $st.Phase "open"}}
+    <p>Opening <a href="{{$st.URL}}">{{$st.URL}}</a></p>
+  {{else if eq $st.Phase "failed"}}
+    <p class="danger">{{$st.Error}}</p>
+    <p><a class="button" href="{{$st.RetryURL}}">Try another sentence</a></p>
+  {{else}}
+    <p>{{if $st.Line}}{{$st.Line}}{{else}}Starting the fix.{{end}}</p>
+  {{end}}
+</div>
 {{end}}
 
 {{define "pages/improve/show-placeholder"}}<div></div>{{end}}

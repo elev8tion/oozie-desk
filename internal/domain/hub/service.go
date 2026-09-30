@@ -677,9 +677,14 @@ func (s *Service) Desk(ctx context.Context, text, errMsg, flash string) (Desk, e
 	inbox, _ := s.Inbox(ctx)
 	peers, _ := s.Peers(ctx)
 	grants, _ := s.Grants(ctx)
+	setup := ""
+	if errMsg == "" {
+		setup = s.projects.SetupHint()
+	}
 	return Desk{
-		Text: text, Err: errMsg, Flash: flash,
+		Text: text, Err: errMsg, Flash: flash, Setup: setup,
 		Apps: apps, Inbox: inbox, Peers: peers, Grants: grants,
-		Connect: s.Addr() != "", Addr: s.Addr(),
+		Insights: s.projects.Insights(ctx),
+		Connect:  s.Addr() != "", Addr: s.Addr(),
 	}, nil
 }

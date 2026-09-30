@@ -476,7 +476,7 @@ func TestWishLifecycle(t *testing.T) {
 	}
 
 	// No pi in tests: BuildWish must fail the wish honestly.
-	if err := s.BuildWish(ctx, wishes[0].ID); err == nil {
+	if _, err := s.BuildWish(ctx, wishes[0].ID); err == nil {
 		t.Fatal("expected agent-unavailable error")
 	}
 	w, _ := s.repo.GetWish(ctx, wishes[0].ID)
@@ -564,7 +564,7 @@ func TestWishNoCodeErrorTruncation(t *testing.T) {
 	if !strings.Contains(got, "…") {
 		t.Errorf("long input should be truncated with an ellipsis: %q", got)
 	}
-	if got := wishNoCodeError("  \n \t "); got != "the agent finished without producing an app and left no message — see the project timeline" {
+	if got := wishNoCodeError("  \n \t "); got != "the agent finished without producing a tool and left no message — see the project timeline" {
 		t.Errorf("empty input fallback = %q", got)
 	}
 }

@@ -1,6 +1,7 @@
 {{define "pages/store/index-content"}}
 <section class="toolbar"><div><p class="eyebrow">All tools</p><h1>On this desk</h1><p class="muted">Running and stopped. Open one, or remix it into something else.</p></div></section>
-<form class="filterbar" hx-get="/fragments/store/results" hx-target="#store-results" hx-trigger="input changed delay:250ms, change"><label>Search<input name="q" placeholder="tool or headline"></label><label>Filter<select name="filter"><option value="">All tools</option><option value="installed">Running</option></select></label></form>
+{{$filter := index .Data "Filter"}}
+<form class="filterbar" hx-get="/fragments/store/results" hx-target="#store-results" hx-trigger="input changed delay:250ms, change"><label>Search<input name="q" value="{{index .Data "Q"}}" placeholder="tool or headline"></label><label>Filter<select name="filter"><option value="" {{if not $filter}}selected{{end}}>All tools</option><option value="installed" {{if eq $filter "installed"}}selected{{end}}>Running</option></select></label></form>
 <div id="store-results">{{template "partials/store/list" .}}</div>
 {{end}}
 

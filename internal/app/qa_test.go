@@ -29,7 +29,7 @@ func TestQAWebFactory(t *testing.T) {
 	}
 
 	t.Run("pages", func(t *testing.T) {
-		for _, path := range []string{"/projects", "/projects/new", "/store", "/installed-apps", "/publishing/jobs", "/settings", "/wishes"} {
+		for _, path := range []string{"/projects", "/projects/new", "/store", "/publishing/jobs", "/settings", "/wishes"} {
 			body := qaGet(t, client, server.URL+path, 200)
 			for _, banned := range []string{"/Applications", "Package.swift", "Install to /Applications", ".app bundle"} {
 				if strings.Contains(body, banned) {

@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"oozie/internal/agent/pi"
 )
 
-// MakeView is what the front door shows while a sentence becomes a page.
+// MakeView is what the front door shows while a sentence becomes a tool.
 // Phase is "building", "open", or "failed".
 type MakeView struct {
 	ProjectID int64
@@ -22,19 +24,34 @@ type MakeView struct {
 	Line      string
 }
 
+// ImproveView is the Fix wait screen: rebuild in place, then reopen /run.
+// Phase is "building", "open", or "failed".
+type ImproveView struct {
+	RequestID int64
+	AppID     int64
+	Name      string
+	Slug      string
+	Phase     string
+	URL       string
+	Error     string
+	Note      string
+	RetryURL  string
+	Line      string
+}
+
 // Make is the front door: one sentence becomes a trusted project, an agent
-// build, and — when that build finishes — a running localhost page.
+// build, and — when that build finishes — a running localhost tool.
 func (s *Service) Make(ctx context.Context, text string) (int64, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return 0, ErrValidation{"Describe the page."}
+		return 0, ErrValidation{"Describe the tool."}
 	}
 	if _, err := s.modelForNewBuild(""); err != nil {
 		return 0, err
 	}
 	name := wishProjectName(text)
 	if strings.HasPrefix(name, "Wish ") {
-		name = "Page " + name[len("Wish "):]
+		name = "Tool " + name[len("Wish "):]
 	}
 	project, err := s.CreateProject(ctx, name, "", true)
 	if err != nil {
@@ -56,11 +73,33 @@ func (s *Service) Make(ctx context.Context, text string) (int64, error) {
 		_ = s.DeleteProject(ctx, project.ID, true)
 		return 0, err
 	}
-	s.makeByRequest.Store(requestID, project.ID)
+	s.trackFrontDoor(requestID, project.ID)
 	return project.ID, nil
 }
 
-// MakeStatus reports whether the page is still being built, ready to open,
+// trackFrontDoor registers a build so settleMake auto-publishes and the
+// make-wait screen can open /run when the tool is listening.
+func (s *Service) trackFrontDoor(requestID, projectID int64) {
+	if requestID == 0 || projectID == 0 {
+		return
+	}
+	s.makeByRequest.Store(requestID, projectID)
+}
+
+// SetupHint is a desk sentence when no signed-in model is ready. It does not
+// probe the network — only credentials + catalog — so the desk stays fast.
+func (s *Service) SetupHint() string {
+	signed := pi.SignedProviders(authPath())
+	if s.signedIn != nil {
+		signed = s.signedIn()
+	}
+	if len(pi.CandidateModels(s.catalog, "", signed)) == 0 {
+		return "No model is signed in. In a terminal run pi /login, pick a provider, then come back and build."
+	}
+	return ""
+}
+
+// MakeStatus reports whether the tool is still being built, ready to open,
 // or stopped with one sentence.
 func (s *Service) MakeStatus(ctx context.Context, projectID int64) (MakeView, error) {
 	project, err := s.repo.GetProject(ctx, projectID)
@@ -100,13 +139,13 @@ func (s *Service) MakeStatus(ctx context.Context, projectID int64) (MakeView, er
 		view.Phase = "failed"
 		view.Error = plainPageError(msg)
 		if view.Error == "" {
-			view.Error = "The agent stopped before the page was ready."
+			view.Error = "The agent stopped before the tool was ready."
 		}
 		return view, nil
 	}
 	view.Line = "Starting."
 	if jobErr == nil && (job.Status == "queued" || job.Status == "running") {
-		view.Line = "Starting the page."
+		view.Line = "Starting the tool."
 		return view, nil
 	}
 	if role, toolStatus, content, err := s.repo.LatestActivity(ctx, projectID); err == nil {
@@ -115,8 +154,67 @@ func (s *Service) MakeStatus(ctx context.Context, projectID int64) (MakeView, er
 	return view, nil
 }
 
+// ImproveStatus reports Fix progress for a filed improve request.
+func (s *Service) ImproveStatus(ctx context.Context, requestID int64) (ImproveView, error) {
+	imp, err := s.repo.ImproveByRequest(ctx, requestID)
+	if err != nil {
+		return ImproveView{}, err
+	}
+	if imp == nil {
+		return ImproveView{}, sql.ErrNoRows
+	}
+	app, err := s.repo.GetStoreApp(ctx, imp.StoreAppID)
+	if err != nil {
+		return ImproveView{}, err
+	}
+	view := ImproveView{
+		RequestID: requestID,
+		AppID:     app.ID,
+		Name:      app.Name,
+		Slug:      app.BundleSlug,
+		Note:      imp.Note,
+		Phase:     "building",
+		RetryURL:  "/improve/" + app.BundleSlug,
+		Line:      "Starting the fix.",
+	}
+	switch imp.Status {
+	case "done":
+		view.Phase = "open"
+		view.URL = fmt.Sprintf("/run/%d", app.ID)
+		return view, nil
+	case "failed":
+		view.Phase = "failed"
+		view.Error = "The fix did not land. Try another sentence."
+		if status, msg, rerr := s.repo.RequestStatus(ctx, requestID); rerr == nil && (status == "failed" || status == "cancelled") {
+			if plain := plainPageError(msg); plain != "" {
+				view.Error = plain
+			}
+		}
+		return view, nil
+	case "publishing":
+		view.Line = "Starting the tool."
+		return view, nil
+	}
+	if status, msg, err := s.repo.RequestStatus(ctx, requestID); err == nil {
+		if status == "failed" || status == "cancelled" {
+			view.Phase = "failed"
+			view.Error = plainPageError(msg)
+			if view.Error == "" {
+				view.Error = "The agent stopped before the fix was ready."
+			}
+			return view, nil
+		}
+	}
+	if app.ProjectID != nil {
+		if role, toolStatus, content, err := s.repo.LatestActivity(ctx, *app.ProjectID); err == nil {
+			view.Line = buildProgress(role, toolStatus, content)
+		}
+	}
+	return view, nil
+}
+
 // settleMake publishes a front-door build once the agent finishes. The job
-// stays running until the page is listening, so the waiting screen can open it.
+// stays running until the tool is listening, so the waiting screen can open it.
 func (s *Service) settleMake(projectID, requestID int64, status string) {
 	v, ok := s.makeByRequest.LoadAndDelete(requestID)
 	if !ok || v.(int64) != projectID || status != "completed" {
@@ -156,9 +254,9 @@ func buildProgress(role, status, content string) string {
 	case strings.Contains(text, "go build"), strings.Contains(text, "go test"):
 		return "Checking the build."
 	case strings.HasPrefix(text, "write"), strings.HasPrefix(text, "edit"), strings.Contains(text, "main.go"):
-		return "Writing the page."
+		return "Writing the tool."
 	case role == "assistant" && strings.TrimSpace(content) != "":
-		return "Writing the page."
+		return "Writing the tool."
 	case role == "tool" || strings.Contains(text, "bash") || status == "running":
 		return "Running a check."
 	default:
@@ -178,10 +276,10 @@ func plainPageError(msg string) string {
 		return "No model answered."
 	}
 	if strings.Contains(msg, "no go.mod") || strings.Contains(msg, "without producing") {
-		return "The agent finished without a page to open."
+		return "The agent finished without a tool to open."
 	}
 	if strings.Contains(msg, "not reachable") || strings.Contains(msg, "Couldn't start") {
-		return "The page built, but it did not start."
+		return "The tool built, but it did not start."
 	}
 	if i := strings.IndexByte(msg, '\n'); i > 0 {
 		msg = msg[:i]

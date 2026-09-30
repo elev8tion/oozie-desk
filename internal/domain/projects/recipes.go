@@ -248,8 +248,28 @@ func (s *Service) importRecipeJSON(ctx context.Context, raw string) (Project, er
 	b.WriteString("\nSynthesize these into one coherent app (later prompts refine earlier ones — don't replay them literally if they conflict).")
 	b.WriteString("\n\nData isolation: this is a fresh desk. Start with empty local storage. Put any durable records under a data/ directory in the project root (create it on first write). Do not invent or hardcode the original author's personal records, sample rows that look like real usage, or anything that could have come from their database. Each desk owns its own data/.")
 	b.WriteString("\nVerify with 'go build -o /tmp/app .' and keep the server listening on $ADDR.")
-	if _, err := s.sendAgentMessage(ctx, project.ID, "build", b.String()); err != nil {
+	headline := strings.TrimSpace(rec.Headline)
+	if headline == "" {
+		headline = rec.Name
+	}
+	desc := strings.TrimSpace(rec.Description)
+	if desc == "" && len(rec.Prompts) > 0 {
+		desc = rec.Prompts[0]
+	}
+	draft := PublishDraft{
+		ProjectID:   project.ID,
+		AppName:     rec.Name,
+		Headline:    headline,
+		Description: desc,
+		AutoInstall: true,
+	}
+	if err := s.repo.SaveDraft(ctx, draft); err != nil {
 		return project, err
 	}
+	requestID, err := s.sendAgentMessage(ctx, project.ID, "build", b.String())
+	if err != nil {
+		return project, err
+	}
+	s.trackFrontDoor(requestID, project.ID)
 	return project, nil
 }

@@ -17,7 +17,7 @@ import (
 func (s *Service) AddWish(ctx context.Context, text string) error {
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return ErrValidation{"Describe the app you wish existed."}
+		return ErrValidation{"Describe the tool you wish existed."}
 	}
 	return s.repo.AddWish(ctx, text)
 }
@@ -31,33 +31,36 @@ func (s *Service) ListWishes(ctx context.Context) ([]Wish, error) {
 }
 
 // BuildWish grants a wish now: project, agent build, and — when the agent
-// finishes — an automatic publish, so the app lands in the store by itself.
-func (s *Service) BuildWish(ctx context.Context, id int64) error {
+// finishes — an automatic publish. Returns the project id for the make-wait screen.
+func (s *Service) BuildWish(ctx context.Context, id int64) (int64, error) {
 	wish, err := s.repo.GetWish(ctx, id)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if wish.Status == "building" {
-		return ErrValidation{"This wish is already being built."}
+		return 0, ErrValidation{"This wish is already being built."}
 	}
 	name := wishProjectName(wish.Text)
 	project, err := s.CreateProject(ctx, name, "", true)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// Auto-start so overnight prototypes are running by morning.
 	draft := PublishDraft{ProjectID: project.ID, AppName: name, Headline: wishHeadline(wish.Text), Description: wish.Text, PublishTarget: "public", Visibility: "unlisted", ScreenshotManifest: "[]", AutoInstall: true}
 	if err := s.repo.SaveDraft(ctx, draft); err != nil {
-		return err
+		return 0, err
 	}
 	msg := pageBuildMessage(wish.Text)
 	requestID, err := s.sendAgentMessage(ctx, project.ID, "build", msg)
 	if err != nil {
 		_ = s.repo.SettleWish(ctx, id, "failed", err.Error())
-		return err
+		return 0, err
 	}
 	s.wishByRequest.Store(requestID, id)
-	return s.repo.SetWishBuilding(ctx, id, project.ID)
+	if err := s.repo.SetWishBuilding(ctx, id, project.ID); err != nil {
+		return 0, err
+	}
+	return project.ID, nil
 }
 
 // settleWish closes the fairy loop: agent done → publish → wish granted.
@@ -88,7 +91,7 @@ func (s *Service) settleWish(projectID, requestID int64, status string) {
 			return
 		}
 		_ = s.repo.SettleWish(ctx, wishID, "built", "")
-		log.Printf("wish %d granted: app published", wishID)
+		log.Printf("wish %d granted: tool published", wishID)
 	})
 	if err != nil {
 		_ = s.repo.SettleWish(ctx, wishID, "failed", "publish could not start: "+err.Error())
@@ -131,7 +134,7 @@ func (s *Service) runNightShift(ctx context.Context) {
 	}
 	log.Printf("night shift: granting %d wish(es)", len(wishes))
 	for _, w := range wishes {
-		if err := s.BuildWish(ctx, w.ID); err != nil {
+		if _, err := s.BuildWish(ctx, w.ID); err != nil {
 			log.Printf("night shift: wish %d: %v", w.ID, err)
 		}
 	}
@@ -163,12 +166,12 @@ func wishProjectName(text string) string {
 func wishNoCodeError(agentMsg string) string {
 	msg := strings.Join(strings.Fields(agentMsg), " ")
 	if msg == "" {
-		return "the agent finished without producing an app and left no message — see the project timeline"
+		return "the agent finished without producing a tool and left no message — see the project timeline"
 	}
 	if r := []rune(msg); len(r) > 200 {
 		msg = string(r[:200]) + "…"
 	}
-	return "the agent finished without producing an app. It said: “" + msg + "” — see the project timeline for the full conversation"
+	return "the agent finished without producing a tool. It said: “" + msg + "” — see the project timeline for the full conversation"
 }
 
 // wishHeadline is the wish's first sentence, capped for the store card.

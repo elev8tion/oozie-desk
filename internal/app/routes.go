@@ -59,15 +59,16 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /projects/{id}/agent/questions/{toolUseID}/answer", h.AnswerQuestion)
 	mux.HandleFunc("POST /projects/{id}/agent/questions/{toolUseID}/dismiss", h.DismissQuestion)
 	mux.HandleFunc("POST /projects/{id}/agent/permissions/{requestID}", h.Permission)
-	mux.HandleFunc("POST /projects/{id}/feedback", h.Feedback)
 
-	// Optional launch pings from published apps (localhost only).
+	// Optional launch pings from published tools (localhost only).
 	mux.HandleFunc("GET /api/beacon/{slug}", h.Beacon)
 	mux.HandleFunc("POST /api/beacon/{slug}", h.Beacon)
 
-	// The fix-me page published apps link from their footer.
+	// Fix form + wait screen (same loop as Make → /run).
 	mux.HandleFunc("GET /improve/{slug}", h.ImprovePage)
 	mux.HandleFunc("POST /improve/{slug}", h.ImproveSubmit)
+	mux.HandleFunc("GET /fix/{id}", h.ImproveWait)
+	mux.HandleFunc("GET /fragments/fix/{id}", h.ImproveStatus)
 
 	mux.HandleFunc("GET /store", h.Store)
 	mux.HandleFunc("GET /store/apps/{id}", h.StoreApp)

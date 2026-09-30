@@ -39,7 +39,7 @@ func (h *Handlers) NotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
-	h.page(w, r, "oozie", "pages/make/index-content", map[string]any{"Text": r.URL.Query().Get("text")})
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (h *Handlers) Make(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +60,7 @@ func (h *Handlers) MakeWait(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := h.service.MakeStatus(r.Context(), id)
 	if err != nil {
-		h.errorPage(w, r, 404, "That page is not being built.")
+		h.errorPage(w, r, 404, "That tool is not being built.")
 		return
 	}
 	if st.Phase == "open" {
@@ -97,7 +97,7 @@ func (h *Handlers) MakeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := h.service.MakeStatus(r.Context(), id)
 	if err != nil {
-		http.Error(w, "That page is not being built.", 404)
+		http.Error(w, "That tool is not being built.", 404)
 		return
 	}
 	if st.Phase == "open" {
@@ -107,7 +107,7 @@ func (h *Handlers) MakeStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Onboarding(w http.ResponseWriter, r *http.Request) {
-	h.page(w, r, "Welcome to oozie", "pages/projects/onboarding-content", nil)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 func (h *Handlers) Projects(w http.ResponseWriter, r *http.Request) {
 	ps, err := h.service.ListProjects(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("filter"))
@@ -325,28 +325,14 @@ func (h *Handlers) Permission(w http.ResponseWriter, r *http.Request) {
 	}
 	h.renderer.HTML(w, 200, "partials/agents/pending", render.ViewData{Flash: flash, Data: map[string]any{"Agent": page}})
 }
-func (h *Handlers) Feedback(w http.ResponseWriter, r *http.Request) {
-	id, ok := h.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	_ = r.ParseForm()
-	err := h.service.SaveFeedback(r.Context(), id, r.FormValue("feedback_type"), r.FormValue("reason"), r.FormValue("additional_feedback"))
-	if err != nil {
-		h.renderer.HTML(w, 422, "partials/projects/flash", render.ViewData{Flash: err.Error()})
-		return
-	}
-	h.renderer.HTML(w, 200, "partials/projects/flash", render.ViewData{Flash: "Feedback sent."})
-}
-
-// ImprovePage is the fix-me page every published app links from its footer.
+// ImprovePage is the fix form every published tool links from its footer.
 func (h *Handlers) ImprovePage(w http.ResponseWriter, r *http.Request) {
 	app, err := h.service.AppBySlug(r.Context(), r.PathValue("slug"))
 	if err != nil {
 		h.errorPage(w, r, 404, "No tool on this desk matches this link. Build it first.")
 		return
 	}
-	h.page(w, r, "Improve "+app.Name, "pages/improve/show-content", map[string]any{"App": app})
+	h.page(w, r, "Fix "+app.Name, "pages/improve/show-content", map[string]any{"App": app})
 }
 
 func (h *Handlers) ImproveSubmit(w http.ResponseWriter, r *http.Request) {
@@ -357,11 +343,45 @@ func (h *Handlers) ImproveSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = r.ParseForm()
-	if err := h.service.FileImprovement(r.Context(), slug, r.FormValue("text")); err != nil {
-		h.page(w, r, "Improve "+app.Name, "pages/improve/show-content", map[string]any{"App": app, "Error": err.Error(), "Text": r.FormValue("text")})
+	requestID, err := h.service.FileImprovement(r.Context(), slug, r.FormValue("text"))
+	if err != nil {
+		h.page(w, r, "Fix "+app.Name, "pages/improve/show-content", map[string]any{"App": app, "Error": err.Error(), "Text": r.FormValue("text")})
 		return
 	}
-	h.page(w, r, "Improve "+app.Name, "pages/improve/show-content", map[string]any{"App": app, "Sent": true})
+	http.Redirect(w, r, "/fix/"+strconv.FormatInt(requestID, 10), http.StatusSeeOther)
+}
+
+func (h *Handlers) ImproveWait(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	st, err := h.service.ImproveStatus(r.Context(), id)
+	if err != nil {
+		h.errorPage(w, r, 404, "That fix is not running.")
+		return
+	}
+	if st.Phase == "open" {
+		http.Redirect(w, r, st.URL, http.StatusSeeOther)
+		return
+	}
+	h.page(w, r, st.Name+" · oozie", "pages/improve/wait-content", map[string]any{"Status": st})
+}
+
+func (h *Handlers) ImproveStatus(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	st, err := h.service.ImproveStatus(r.Context(), id)
+	if err != nil {
+		http.Error(w, "That fix is not running.", 404)
+		return
+	}
+	if st.Phase == "open" {
+		w.Header().Set("HX-Redirect", st.URL)
+	}
+	h.renderer.HTML(w, 200, "partials/improve/status", render.ViewData{Data: map[string]any{"Status": st}})
 }
 
 // Beacon records an optional launch ping from a published app. Always 204.
@@ -376,7 +396,9 @@ func (h *Handlers) Store(w http.ResponseWriter, r *http.Request) {
 		h.errorPage(w, r, 500, "Couldn't load the tools on this desk.")
 		return
 	}
-	h.page(w, r, "Tools · oozie", "pages/store/index-content", map[string]any{"Apps": apps})
+	h.page(w, r, "Tools · oozie", "pages/store/index-content", map[string]any{
+		"Apps": apps, "Q": r.URL.Query().Get("q"), "Filter": r.URL.Query().Get("filter"),
+	})
 }
 func (h *Handlers) StoreResults(w http.ResponseWriter, r *http.Request) {
 	apps, _ := h.service.ListStoreApps(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("filter"))
@@ -509,8 +531,7 @@ func (h *Handlers) AcceptRecipeDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	project, err := h.service.AcceptRecipeDraft(r.Context(), id)
 	if project.ID != 0 {
-		// Project exists even when pi failed to start — land on the agent page.
-		http.Redirect(w, r, "/projects/"+strconv.FormatInt(project.ID, 10)+"/agent", http.StatusSeeOther)
+		http.Redirect(w, r, "/make/"+strconv.FormatInt(project.ID, 10), http.StatusSeeOther)
 		return
 	}
 	if err != nil {
@@ -540,7 +561,7 @@ func (h *Handlers) EditRecipeDraft(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	project, err := h.service.EditRecipeDraft(r.Context(), id, r.FormValue("plan"))
 	if project.ID != 0 {
-		http.Redirect(w, r, "/projects/"+strconv.FormatInt(project.ID, 10)+"/agent", http.StatusSeeOther)
+		http.Redirect(w, r, "/make/"+strconv.FormatInt(project.ID, 10), http.StatusSeeOther)
 		return
 	}
 	if err != nil {
@@ -566,11 +587,10 @@ func (h *Handlers) ImportRecipe(w http.ResponseWriter, r *http.Request) {
 		h.page(w, r, "Recipes · oozie", "pages/recipes/import-content", map[string]any{"Error": err.Error(), "Recipe": raw, "Apps": apps})
 		return
 	}
-	http.Redirect(w, r, "/projects/"+strconv.FormatInt(project.ID, 10)+"/agent", http.StatusSeeOther)
+	http.Redirect(w, r, "/make/"+strconv.FormatInt(project.ID, 10), http.StatusSeeOther)
 }
 
-// RemixApp forks a store app into a new project with a mutation prompt
-// and drops the user onto the new project's agent page.
+// RemixApp forks a store tool into a new project and waits like Make.
 func (h *Handlers) RemixApp(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.pathID(w, r, "id")
 	if !ok {
@@ -583,7 +603,7 @@ func (h *Handlers) RemixApp(w http.ResponseWriter, r *http.Request) {
 		h.page(w, r, app.Name+" · oozie", "pages/store/show-content", map[string]any{"App": app, "Error": err.Error()})
 		return
 	}
-	http.Redirect(w, r, "/projects/"+strconv.FormatInt(remix.ID, 10)+"/agent", http.StatusSeeOther)
+	http.Redirect(w, r, "/make/"+strconv.FormatInt(remix.ID, 10), http.StatusSeeOther)
 }
 
 func (h *Handlers) OpenApp(w http.ResponseWriter, r *http.Request) {
@@ -603,8 +623,7 @@ func (h *Handlers) OpenApp(w http.ResponseWriter, r *http.Request) {
 	h.renderer.HTML(w, 200, "partials/store/row", render.ViewData{Flash: flash, Err: errMsg, Data: map[string]any{"App": app}})
 }
 func (h *Handlers) InstalledApps(w http.ResponseWriter, r *http.Request) {
-	apps, _ := h.service.InstalledApps(r.Context())
-	h.page(w, r, "Running · oozie", "pages/store/installed-content", map[string]any{"Apps": apps})
+	http.Redirect(w, r, "/store?filter=installed", http.StatusSeeOther)
 }
 
 func (h *Handlers) PublishingJobs(w http.ResponseWriter, r *http.Request) {
@@ -714,11 +733,12 @@ func (h *Handlers) BuildWish(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.service.BuildWish(r.Context(), id); err != nil {
+	projectID, err := h.service.BuildWish(r.Context(), id)
+	if err != nil {
 		h.wishesPage(w, r, "", err.Error())
 		return
 	}
-	h.wishesPage(w, r, "Granting the wish — the agent is building it now.", "")
+	http.Redirect(w, r, "/make/"+strconv.FormatInt(projectID, 10), http.StatusSeeOther)
 }
 
 func (h *Handlers) Settings(w http.ResponseWriter, r *http.Request) {

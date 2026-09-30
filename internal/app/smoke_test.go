@@ -46,11 +46,9 @@ func TestPagesRender(t *testing.T) {
 		{"/projects", 200},
 		{"/projects/new", 200},
 		{"/store", 200},
-		{"/installed-apps", 200},
 		{"/publishing/jobs", 200},
 		{"/people", 200},
 		{"/settings", 200},
-		{"/onboarding", 200},
 		{"/static/js/htmx.min.js", 200},
 		{"/static/css/app.css", 200},
 		{"/projects/999", 404},
@@ -74,6 +72,56 @@ func TestPagesRender(t *testing.T) {
 		if c.want != 200 && !strings.Contains(rec.Body.String(), "Back to Projects") {
 			t.Errorf("GET %s error page is not styled", c.path)
 		}
+	}
+}
+
+func TestDeadPathsRedirectHome(t *testing.T) {
+	handler := newTestServer(t)
+	for _, path := range []string{"/onboarding", "/installed-apps"} {
+		req := httptest.NewRequest("GET", path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != 303 {
+			t.Errorf("GET %s = %d, want 303", path, rec.Code)
+			continue
+		}
+		loc := rec.Header().Get("Location")
+		if path == "/onboarding" && loc != "/" {
+			t.Errorf("onboarding → %s, want /", loc)
+		}
+		if path == "/installed-apps" && !strings.HasPrefix(loc, "/store") {
+			t.Errorf("installed-apps → %s, want /store…", loc)
+		}
+	}
+	req := httptest.NewRequest("GET", "/projects/1/feedback", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code == 200 && strings.Contains(rec.Body.String(), "Send feedback") {
+		t.Fatal("feedback route still live")
+	}
+}
+
+func TestStoreInstalledFilterRenders(t *testing.T) {
+	handler := newTestServer(t)
+	req := httptest.NewRequest("GET", "/store?filter=installed", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("store filter = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `value="installed"`) || !strings.Contains(body, "selected") {
+		t.Fatalf("installed filter not selected:\n%s", body)
+	}
+}
+
+func TestImproveWaitMissingIsNotFound(t *testing.T) {
+	handler := newTestServer(t)
+	req := httptest.NewRequest("GET", "/fix/999", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 404 {
+		t.Fatalf("missing fix wait = %d, want 404", rec.Code)
 	}
 }
 
@@ -103,6 +151,9 @@ func TestMakeUnsignedModelStopsAtTheFrontDoor(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "This model is not signed in.") {
 		t.Fatalf("desk did not show the sentence: %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "pi /login") {
+		t.Fatalf("desk did not show setup help: %s", rec.Body.String())
 	}
 	req = httptest.NewRequest("GET", "/projects", nil)
 	rec = httptest.NewRecorder()

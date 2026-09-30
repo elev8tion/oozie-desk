@@ -4,13 +4,28 @@
   <p class="eyebrow">Your desk</p>
   <h1>What should this tool do?</h1>
   <p class="muted">One sentence. oozie builds it on this machine and opens it. Sharing stays off until you turn a link on.</p>
-  {{if $d.Err}}<p class="danger">{{$d.Err}}</p>{{end}}
+  {{if $d.Err}}
+  <p class="danger">{{$d.Err}}</p>
+  {{if eq $d.Err "This model is not signed in."}}
+  <div class="notice">Sign in first: open a terminal and run <code>pi /login</code>, pick a provider, then try again.</div>
+  {{end}}
+  {{else if $d.Setup}}
+  <div class="notice">{{$d.Setup}}</div>
+  {{end}}
   {{if $d.Flash}}<p class="notice good">{{$d.Flash}}</p>{{end}}
   <form method="post" action="/make" class="form-stack">
-    <label>Tool<textarea name="text" rows="4" required placeholder="A page that tracks my sourdough feedings">{{$d.Text}}</textarea></label>
+    <label>Tool<textarea name="text" rows="4" required placeholder="A tool that tracks my sourdough feedings">{{$d.Text}}</textarea></label>
     <div class="actions"><button class="button primary">Build and open</button></div>
   </form>
 </section>
+
+{{$insights := $d.Insights}}
+{{if $insights}}
+<section class="panel stack-sm">
+  <p class="eyebrow">oozie noticed</p>
+  {{range $i := $insights}}<div class="mini-row"><span>{{$i.Text}}</span><a class="button small" href="{{$i.ActionURL}}">{{$i.ActionTxt}}</a></div>{{end}}
+</section>
+{{end}}
 
 <section class="panel stack">
   <p class="eyebrow">Shared with me</p>

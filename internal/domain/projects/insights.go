@@ -30,7 +30,7 @@ func (s *Service) Insights(ctx context.Context) []Insight {
 					since = fmt.Sprintf("%d days", int(time.Since(*app.LastPublishedAt).Hours()/24))
 				}
 				out = append(out, Insight{
-					Text:      fmt.Sprintf("%s is installed but hasn't been opened in %s. Retire it, or tell the agent what would make it worth opening.", app.Name, since),
+					Text:      fmt.Sprintf("%s is on this desk but hasn't been opened in %s. Retire it, or tell the agent what would make it worth opening.", app.Name, since),
 					ActionURL: "/improve/" + app.BundleSlug, ActionTxt: "Make it better",
 				})
 			}
@@ -40,7 +40,7 @@ func (s *Service) Insights(ctx context.Context) []Insight {
 		}
 		if top != nil {
 			out = append(out, Insight{
-				Text:      fmt.Sprintf("%s is your most-used app (%d launches). Heavy use earns a polish pass.", top.Name, top.LaunchCount),
+				Text:      fmt.Sprintf("%s is your most-used tool (%d opens). Heavy use earns a polish pass.", top.Name, top.LaunchCount),
 				ActionURL: "/improve/" + top.BundleSlug, ActionTxt: "Polish it",
 			})
 		}

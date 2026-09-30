@@ -64,13 +64,15 @@ type SidebarTool struct {
 
 // Desk is the front door: make a tool, see what is running, see what was shared.
 type Desk struct {
-	Text    string
-	Err     string
-	Flash   string
-	Apps    any
-	Inbox   []InboxItem
-	Peers   []Peer
-	Grants  []Grant
-	Connect bool
-	Addr    string
+	Text     string
+	Err      string
+	Flash    string
+	Setup    string // non-empty when the desk cannot build yet (no signed-in model)
+	Apps     any
+	Inbox    []InboxItem
+	Peers    []Peer
+	Grants   []Grant
+	Insights any
+	Connect  bool
+	Addr     string
 }

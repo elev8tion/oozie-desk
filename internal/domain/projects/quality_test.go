@@ -59,7 +59,7 @@ func TestMakeStatusLineReachesTheWaitingFragment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Phase != "building" || st.Line != "Writing the page." {
+	if st.Phase != "building" || st.Line != "Writing the tool." {
 		t.Fatalf("status = %+v", st)
 	}
 
@@ -74,7 +74,7 @@ func TestMakeStatusLineReachesTheWaitingFragment(t *testing.T) {
 	rec := httptest.NewRecorder()
 	renderer.HTML(rec, 200, "partials/make/status", render.ViewData{Data: map[string]any{"Status": st}})
 	body := rec.Body.String()
-	if !strings.Contains(body, "Writing the page.") {
+	if !strings.Contains(body, "Writing the tool.") {
 		t.Fatalf("fragment missing the live line:\n%s", body)
 	}
 	if strings.Contains(body, "Building…") {

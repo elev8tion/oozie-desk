@@ -243,7 +243,7 @@ func (h *Handlers) AcceptInbox(w http.ResponseWriter, r *http.Request) {
 		h.back(w, r, "/", err.Error())
 		return
 	}
-	http.Redirect(w, r, "/projects/"+strconv.FormatInt(project.ID, 10)+"/agent", http.StatusSeeOther)
+	http.Redirect(w, r, "/make/"+strconv.FormatInt(project.ID, 10), http.StatusSeeOther)
 }
 
 func (h *Handlers) DismissInbox(w http.ResponseWriter, r *http.Request) {
@@ -263,7 +263,7 @@ func (h *Handlers) AcceptLink(w http.ResponseWriter, r *http.Request) {
 		h.back(w, r, "/", err.Error())
 		return
 	}
-	http.Redirect(w, r, "/projects/"+strconv.FormatInt(project.ID, 10)+"/agent", http.StatusSeeOther)
+	http.Redirect(w, r, "/make/"+strconv.FormatInt(project.ID, 10), http.StatusSeeOther)
 }
 
 func (h *Handlers) back(w http.ResponseWriter, r *http.Request, fallback, errMsg string) {

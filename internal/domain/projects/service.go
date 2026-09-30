@@ -691,10 +691,22 @@ func (s *Service) RemixApp(ctx context.Context, appID int64, mutation string) (P
 		return remix, ErrValidation{"Copied project incompletely: " + err.Error()}
 	}
 	s.appendTasteSignal("remix "+app.Name, mutation)
-	msg := fmt.Sprintf("This project is a remix of %q — its source was copied here as the starting point (runtime data/ and databases were left behind so this desk starts empty).\n\nMutation requested by the user:\n\n%s\n\nApply the mutation: rename the app appropriately (module path, page title, and any user-visible names), implement the change, keep what still serves the new purpose, delete what doesn't, and verify with 'go build -o /tmp/remix .'. Keep durable records under data/ only. The app must keep listening on $ADDR.", app.Name, mutation)
-	if _, err := s.sendAgentMessage(ctx, remix.ID, "build", msg); err != nil {
+	draft := PublishDraft{
+		ProjectID:   remix.ID,
+		AppName:     remix.Name,
+		Headline:    wishHeadline(mutation),
+		Description: mutation,
+		AutoInstall: true,
+	}
+	if err := s.repo.SaveDraft(ctx, draft); err != nil {
 		return remix, err
 	}
+	msg := fmt.Sprintf("This project is a remix of %q — its source was copied here as the starting point (runtime data/ and databases were left behind so this desk starts empty).\n\nMutation requested by the user:\n\n%s\n\nApply the mutation: rename the tool appropriately (module path, page title, and any user-visible names), implement the change, keep what still serves the new purpose, delete what doesn't, and verify with 'go build -o /tmp/remix .'. Keep durable records under data/ only. The tool must keep listening on $ADDR.", app.Name, mutation)
+	requestID, err := s.sendAgentMessage(ctx, remix.ID, "build", msg)
+	if err != nil {
+		return remix, err
+	}
+	s.trackFrontDoor(requestID, remix.ID)
 	return remix, nil
 }
 
@@ -762,27 +774,31 @@ func (s *Service) AppBySlug(ctx context.Context, slug string) (StoreApp, error) 
 }
 
 // FileImprovement is the fix-me wormhole: text typed inside a published
-// app (or on its store page) becomes a BUILD request on the app's project,
-// and the loop auto-republishes + reinstalls when the agent finishes.
-func (s *Service) FileImprovement(ctx context.Context, slug, text string) error {
+// tool becomes a BUILD request on its project; the loop auto-republishes
+// and restarts when the agent finishes. Returns the agent request id for
+// the Fix wait screen.
+func (s *Service) FileImprovement(ctx context.Context, slug, text string) (int64, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return ErrValidation{"Describe what should be better."}
+		return 0, ErrValidation{"Describe what should be better."}
 	}
 	app, err := s.repo.GetStoreAppBySlug(ctx, slug)
 	if err != nil {
-		return ErrValidation{"No published app matches this link."}
+		return 0, ErrValidation{"No tool on this desk matches this link."}
 	}
 	if app.ProjectID == nil {
-		return ErrValidation{"This app has no linked project, so the agent can't work on it."}
+		return 0, ErrValidation{"This tool has no linked project, so the agent can't work on it."}
 	}
-	msg := fmt.Sprintf("[improvement request filed from the running app %q]\n\nThe user asked for this improvement:\n\n%s\n\nImplement it in this project, keep everything else working, and verify with 'go build -o /tmp/app .'. The server must still listen on $ADDR and serve GET /. oozie republishes and restarts the app automatically when you finish.", app.Name, text)
+	msg := fmt.Sprintf("[improvement request filed from the running tool %q]\n\nThe user asked for this improvement:\n\n%s\n\nImplement it in this project, keep everything else working, and verify with 'go build -o /tmp/app .'. The server must still listen on $ADDR and serve GET /. oozie republishes and restarts the tool automatically when you finish.", app.Name, text)
 	requestID, err := s.sendAgentMessage(ctx, *app.ProjectID, "build", msg)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	s.appendTasteSignal("improve "+app.Name, text)
-	return s.repo.InsertImproveRequest(ctx, requestID, app.ID, text)
+	if err := s.repo.InsertImproveRequest(ctx, requestID, app.ID, text); err != nil {
+		return 0, err
+	}
+	return requestID, nil
 }
 func (s *Service) Question(projectID, requestID int64, rpcID, prompt, optionsJSON string) {
 	if err := s.repo.InsertQuestion(context.Background(), projectID, requestID, rpcID, prompt, optionsJSON); err != nil {
@@ -899,12 +915,6 @@ func wrapModeMessage(mode, message string) string {
 		return "[oozie mode: PLAN — plan only, do not modify files]\n\n" + message
 	}
 	return "[oozie mode: BUILD — implement directly]\n\n" + message
-}
-func (s *Service) SaveFeedback(ctx context.Context, projectID int64, typ, reason, extra string) error {
-	if strings.TrimSpace(typ) == "" {
-		return ErrValidation{"Feedback type is required."}
-	}
-	return s.repo.SaveFeedback(ctx, projectID, typ, reason, extra)
 }
 func (s *Service) GetDraft(ctx context.Context, projectID int64) (PublishDraft, error) {
 	d, err := s.repo.GetDraft(ctx, projectID)

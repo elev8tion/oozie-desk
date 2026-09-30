@@ -268,6 +268,16 @@ func (r *Repo) CompleteRequest(ctx context.Context, id int64, status string) err
 	return err
 }
 
+// RequestStatus is one agent_requests row plus its latest error line.
+func (r *Repo) RequestStatus(ctx context.Context, id int64) (status, errMsg string, err error) {
+	err = r.db.QueryRowContext(ctx, `SELECT status FROM agent_requests WHERE id=?`, id).Scan(&status)
+	if err != nil {
+		return "", "", err
+	}
+	_ = r.db.QueryRowContext(ctx, `SELECT content FROM agent_messages WHERE request_id=? AND status='error' ORDER BY id DESC LIMIT 1`, id).Scan(&errMsg)
+	return status, errMsg, nil
+}
+
 func (r *Repo) SetSessionModel(ctx context.Context, sessionID int64, model string) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE agent_sessions SET model=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, model, sessionID)
 	return err
@@ -331,11 +341,6 @@ func (r *Repo) PendingPermission(ctx context.Context, projectID int64) (*Permiss
 	}
 	return &p, err
 }
-func (r *Repo) SaveFeedback(ctx context.Context, projectID int64, typ, reason, extra string) error {
-	_, err := r.db.ExecContext(ctx, `INSERT INTO feedback (project_id,user_id,feedback_type,reason,additional_feedback) VALUES (?,?,?,?,?)`, projectID, r.actor.UserID, typ, reason, extra)
-	return err
-}
-
 func (r *Repo) GetDraft(ctx context.Context, projectID int64) (PublishDraft, error) {
 	var d PublishDraft
 	var org sql.NullInt64
