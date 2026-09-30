@@ -33,6 +33,11 @@ func (h *Handlers) errorPage(w http.ResponseWriter, r *http.Request, status int,
 	h.renderer.HTML(w, status, "layouts/base", render.ViewData{Title: "Error · oozie", Content: "pages/error-content", Theme: s.Appearance, Style: s.StyleProfile, Data: map[string]any{"Code": status, "Message": message}})
 }
 
+// NotFound is the desk page for a path that matches no route.
+func (h *Handlers) NotFound(w http.ResponseWriter, r *http.Request) {
+	h.errorPage(w, r, http.StatusNotFound, "That page is not on this desk.")
+}
+
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
 	h.page(w, r, "oozie", "pages/make/index-content", map[string]any{"Text": r.URL.Query().Get("text")})
 }

@@ -97,6 +97,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /settings", h.Settings)
 	mux.HandleFunc("POST /settings", h.SaveSettings)
 	mux.HandleFunc("POST /settings/taste", h.SaveTaste)
+	mux.HandleFunc("/", h.NotFound)
 
 	return withRecovery(withLogging(withDeskGuard(mux)))
 }

@@ -54,6 +54,7 @@ func TestPagesRender(t *testing.T) {
 		{"/static/css/app.css", 200},
 		{"/projects/999", 404},
 		{"/store/apps/999", 404},
+		{"/no-such-page", 404},
 		{"/projects/banana", 400},
 	}
 	for _, c := range cases {
