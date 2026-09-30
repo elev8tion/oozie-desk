@@ -6,7 +6,7 @@
   <label>I wish I had an app that…<textarea name="text" placeholder="…tracks how long my sourdough starter has been fed, with a menu-bar countdown" required></textarea></label>
   <div class="actions"><button class="button primary">Add wish</button></div>
 </form>
-<div class="panel table-panel" style="margin-top:12px">
+<div class="panel table-panel stack-sm">
 {{$wishes := index .Data "Wishes"}}
 {{if $wishes}}
 <table><thead><tr><th>Wish</th><th>Status</th><th>Added</th><th></th></tr></thead><tbody>

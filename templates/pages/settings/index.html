@@ -1,5 +1,6 @@
 {{define "pages/settings/index-content"}}
-<section class="toolbar"><div><p class="eyebrow">Preferences</p><h1>Settings</h1><p class="muted">Appearance preferences for your local workspace.</p></div></section>
+<section class="toolbar"><div><p class="eyebrow">Preferences</p><h1>Settings</h1><p class="muted">Appearance for this desk.</p></div></section>
+<div id="identity-panel" hx-get="/fragments/people/identity" hx-trigger="load" hx-swap="innerHTML"><p class="muted">Name, circle, and Connect live on <a href="/people">People</a>.</p></div>
 <div id="settings-panel">{{template "partials/settings/form" .}}</div>
-<div id="taste-panel" style="margin-top:12px">{{template "partials/settings/taste" .}}</div>
+<div id="taste-panel" class="stack-sm">{{template "partials/settings/taste" .}}</div>
 {{end}}

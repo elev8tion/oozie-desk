@@ -47,6 +47,7 @@ func TestPagesRender(t *testing.T) {
 		{"/store", 200},
 		{"/installed-apps", 200},
 		{"/publishing/jobs", 200},
+		{"/people", 200},
 		{"/settings", 200},
 		{"/onboarding", 200},
 		{"/static/js/htmx.min.js", 200},
@@ -61,6 +62,12 @@ func TestPagesRender(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 		if rec.Code != c.want {
 			t.Errorf("GET %s = %d, want %d", c.path, rec.Code, c.want)
+		}
+		if c.path == "/" && !strings.Contains(rec.Body.String(), "What should this tool do?") {
+			t.Errorf("desk did not render: %s", rec.Body.String())
+		}
+		if c.path == "/people" && !strings.Contains(rec.Body.String(), "Invite only") {
+			t.Errorf("people page did not render: %s", rec.Body.String())
 		}
 		if c.want != 200 && !strings.Contains(rec.Body.String(), "Back to Projects") {
 			t.Errorf("GET %s error page is not styled", c.path)

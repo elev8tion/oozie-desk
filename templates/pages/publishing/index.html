@@ -1,12 +1,12 @@
 {{define "pages/publishing/index-content"}}
-<section class="toolbar"><div><p class="eyebrow">Behind the page</p><h1>Jobs</h1><p class="muted">A job is building, or the page is ready to open from Pages. A failed start is a failed job.</p></div></section>
+<section class="toolbar"><div><p class="eyebrow">Behind the page</p><h1>Jobs</h1><p class="muted">A job is building, or the tool is ready to open from the desk. A failed start is a failed job.</p></div></section>
 <form class="filterbar" hx-get="/fragments/publishing/jobs" hx-target="#publishing-job-list" hx-trigger="change"><label>Status<select name="status"><option value="">All</option><option>queued</option><option>running</option><option>succeeded</option><option>failed</option></select></label></form>
 <div id="publishing-job-list">{{template "partials/publishing/list" .}}</div>
 {{end}}
 
 {{define "pages/publishing/show-content"}}
 {{$p := index .Data "Project"}}
-<section class="toolbar"><div><p class="eyebrow">Publish Draft</p><h1>{{$p.Name}}</h1><p class="muted">Fill in the details and hit Publish — oozie builds this project into a local web server and adds it to your store.</p></div></section>
+<section class="toolbar"><div><p class="eyebrow">Build</p><h1>{{$p.Name}}</h1><p class="muted">Name the tool, then build it on this desk. Sharing stays off until you turn a link on.</p></div></section>
 <div id="publish-draft-form">{{template "partials/publishing/form" .}}</div>
 <h2>Recent jobs</h2><div id="publishing-job-list" hx-get="/fragments/publishing/jobs" hx-trigger="load">Loading…</div>
 {{end}}

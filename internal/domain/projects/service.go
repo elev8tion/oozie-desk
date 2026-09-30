@@ -393,7 +393,7 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 		Workdir:      workdir,
 		Model:        model,
 		PiSessionID:  session.PiSessionID,
-		SystemPrompt: oozieSystemPrompt(project, workdir, s.improveURL(ctx, project)),
+		SystemPrompt: oozieSystemPrompt(project, workdir, s.improveURL(ctx, project), s.repo.IndustryPack(ctx)),
 		Trusted:      project.Trusted,
 	}
 	if err := s.agent.Prompt(opts, requestID, wrapModeMessage(mode, message)); err != nil {
@@ -752,8 +752,8 @@ func newPiSessionID(projectID int64) string {
 	return fmt.Sprintf("oozie-p%d-%s", projectID, hex.EncodeToString(buf))
 }
 
-func oozieSystemPrompt(p Project, workdir, improveURL string) string {
-	return fmt.Sprintf(`You are running inside oozie, a local workspace whose purpose is building small personal web apps, as the agent for the project %q (working directory: %s).
+func oozieSystemPrompt(p Project, workdir, improveURL, industryPack string) string {
+	prompt := fmt.Sprintf(`You are running inside oozie, a local desk whose purpose is building small personal tools, as the agent for the project %q (working directory: %s).
 
 How to behave in oozie:
 - Requests arrive in one of two modes, stated at the top of each message.
@@ -771,10 +771,14 @@ Producing web apps (oozie's publish pipeline):
 - Verify with 'go build -o /tmp/app .' before declaring the work done. oozie then builds the same way and opens the page. No Swift, no Xcode, no .app bundle, no icon, no screenshot pass.
 
 Design:
-- Build one page, not a suite. The page itself is the preview.
+- Build one local tool as a single page, not a suite. The page itself is the preview.
 - The project root contains TASTE.md — the user's personal design voice. Read it before any UI work; its rules override DESIGN.md wherever they conflict.
 - The project root contains DESIGN.md — read it before any UI work and follow it.
 `, p.Name, workdir, improveURL)
+	if strings.TrimSpace(industryPack) != "" {
+		prompt += "\nIndustry pack " + strings.TrimSpace(industryPack) + ":\nFollow that pack's terms when they do not conflict with the contract above. The pack does not change who can connect or where the tool runs.\n"
+	}
+	return prompt
 }
 
 func wrapModeMessage(mode, message string) string {

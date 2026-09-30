@@ -1,0 +1,34 @@
+{{define "partials/desk/share"}}
+{{$appID := index .Data "AppID"}}
+{{$peers := index .Data "Peers"}}
+{{$grants := index .Data "Grants"}}
+{{$hit := false}}
+{{range $grants}}{{if eq .AppID $appID}}{{$hit = true}}{{end}}{{end}}
+<div class="panel stack-sm" id="share-{{$appID}}">
+  {{if .Err}}<p class="danger">{{.Err}}</p>{{end}}
+  {{if $hit}}<p><span class="badge share">Shared</span></p>{{else}}<p><span class="badge">Not shared</span></p>{{end}}
+  {{if not $peers}}
+    <p class="muted">Invite someone from People. A link does nothing until you turn it on, and only an invited desk can open it.</p>
+  {{else}}
+    <form method="post" action="/store/apps/{{$appID}}/share" class="form-stack">
+      <label>Send to
+        <select name="peer_id">
+          <option value="0">Everyone invited</option>
+          {{range $peers}}<option value="{{.ID}}">{{.DisplayName}}</option>{{end}}
+        </select>
+      </label>
+      <div class="actions"><button class="button small">Turn link on</button></div>
+    </form>
+  {{end}}
+  {{range $grants}}
+    {{if eq .AppID $appID}}
+    <p class="share-link">{{.Link}}</p>
+    <p class="muted">On for {{.PeerName}}. They can also paste this link. Turn it off and it stops working.</p>
+    <form method="post" action="/store/apps/{{$appID}}/share/stop">
+      <input type="hidden" name="peer_id" value="{{.PeerID}}">
+      <button class="button small">Turn off</button>
+    </form>
+    {{end}}
+  {{end}}
+</div>
+{{end}}

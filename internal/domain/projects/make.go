@@ -120,7 +120,7 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 }
 
 func pageBuildMessage(text string) string {
-	return fmt.Sprintf(`Build one small personal web page for this request. Do not ask questions — pick sensible defaults.
+	return fmt.Sprintf(`Build one small local tool as a single web page for this request. Do not ask questions — pick sensible defaults.
 
 Contract:
 - Go module at the project root (go.mod and main.go). Prefer the standard library.

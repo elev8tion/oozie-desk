@@ -16,6 +16,11 @@ document.addEventListener('change', (event) => {
   if (el && el.name === 'style_profile') document.documentElement.dataset.style = el.value;
 });
 
+document.body.addEventListener('sidebarRefresh', () => {
+  const el = document.getElementById('sidebar-status');
+  if (el && window.htmx) htmx.ajax('GET', '/fragments/sidebar', {target: el, swap: 'outerHTML'});
+});
+
 document.body.addEventListener('htmx:afterSwap', (event) => {
   const toastRegion = document.getElementById('toast-region');
   const notice = event.detail.target && event.detail.target.querySelector && event.detail.target.querySelector('.notice');
@@ -26,4 +31,14 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     toastRegion.replaceChildren(toast);
     setTimeout(() => toast.remove(), 3500);
   }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const path = window.location.pathname;
+  document.querySelectorAll('.nav-list a').forEach(a => {
+    const href = a.getAttribute('href');
+    if ((href === '/' && path === '/') || (href !== '/' && (path === href || path.startsWith(href + '/')))) {
+      a.setAttribute('aria-current', 'page');
+    }
+  });
 });

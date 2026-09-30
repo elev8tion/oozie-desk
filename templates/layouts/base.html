@@ -11,10 +11,10 @@
 <body>
   <div class="app-frame">
     <aside class="sidebar" aria-label="Main navigation">
-      <a class="brand" href="/"><span class="dot"></span><strong>oozie</strong><small>one page</small></a>
+      <a class="brand" href="/"><span class="dot"></span><strong>oozie</strong><small>your desk</small></a>
       <nav class="nav-list">
-        <a href="/">Make</a>
-        <a href="/store">Pages</a>
+        <a href="/">Desk</a>
+        <a href="/people">People</a>
         <a href="/settings">Settings</a>
       </nav>
       <details class="nav-more">
@@ -23,13 +23,13 @@
           <a href="/projects">Projects</a>
           <a href="/wishes">Wishes</a>
           <a href="/recipes">Recipes</a>
+          <a href="/store">All tools</a>
           <a href="/publishing/jobs">Jobs</a>
         </nav>
       </details>
-      <div class="sidebar-card">
-        <span class="label">Local mode</span>
-        <p>Describe a page. oozie builds it here and opens it on localhost. Fix it from the page itself.</p>
-      </div>
+      <footer class="sidebar-status" id="sidebar-status" hx-get="/fragments/sidebar" hx-trigger="load" hx-swap="outerHTML">
+        <span class="label">This desk</span>
+      </footer>
     </aside>
     <main class="main-panel" id="main-panel">
       {{include .Content .}}

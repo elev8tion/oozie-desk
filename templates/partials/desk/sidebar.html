@@ -1,0 +1,21 @@
+{{define "partials/desk/sidebar"}}
+{{$s := index .Data "Sidebar"}}
+<footer class="sidebar-status" id="sidebar-status">
+  <span class="label">This desk</span>
+  <strong>{{$s.Name}}</strong>
+  <span class="muted">{{$s.Circle}}</span>
+  <dl class="sidebar-meters">
+    <div><dt>Connect</dt><dd class="{{if $s.Connect}}good{{end}}">{{if $s.Connect}}On{{else}}Off{{end}}</dd></div>
+    <div><dt>Running</dt><dd>{{$s.Running}}</dd></div>
+    <div><dt>People</dt><dd>{{$s.People}}</dd></div>
+  </dl>
+  {{if $s.Connect}}<p class="sidebar-addr">{{$s.Addr}}</p>{{end}}
+  {{if $s.Tools}}
+  <ul class="sidebar-tools">
+    {{range $s.Tools}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}
+  </ul>
+  {{else}}
+  <p class="muted">Nothing running.</p>
+  {{end}}
+</footer>
+{{end}}

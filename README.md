@@ -1,15 +1,17 @@
 # oozie (web fork)
 
-A local factory for small personal web pages. You describe a page, your local **pi** agent builds it, and oozie opens it on localhost.
+A local desk for small personal tools. You describe a tool, your local **pi** agent builds it, and oozie opens it on localhost. A company is a circle of desks that pair by invitation. A share sends the recipe, never the data.
 
 This is a copy of the Mac factory. The original at `/Users/kc/oozie` is unchanged. This fork does not install anything into `/Applications`.
 
 ## The loop
 
-1. **Describe the page** — one sentence on the front door. The project, directory, and trust flag are defaults.
+1. **Describe the tool** — one sentence on the desk. The project, directory, and trust flag are defaults.
 2. **Wait** — the agent builds one Go page that listens on `$ADDR`. No icon and no screenshot pass.
 3. **Open** — when the build finishes, oozie starts it and opens the localhost URL. A failed start is a failed job.
-4. **Fix** — the page's footer returns to oozie with another sentence. Remix copies a working page into a new one.
+4. **Fix** — the page's footer returns to oozie with another sentence. Remix copies a working tool into a new one.
+
+People is invitation-only. Connect stays off until you turn it on, and then it listens on a private address, not on the factory port. A share link does nothing until its owner turns it on. The other desk imports the recipe and builds the tool there.
 
 Projects, wishes, recipes, and the job list stay under More. They are not the way in.
 

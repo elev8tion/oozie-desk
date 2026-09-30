@@ -1,0 +1,67 @@
+{{define "pages/people/index-content"}}
+{{$id := index .Data "Identity"}}
+<section class="toolbar">
+  <div>
+    <p class="eyebrow">People</p>
+    <h1>Invite only</h1>
+    <p class="muted">This desk connects on the private network, and only after you turn Connect on. There is no directory and no internet account.</p>
+  </div>
+</section>
+{{if index .Data "Err"}}<p class="danger">{{index .Data "Err"}}</p>{{end}}
+{{if index .Data "Flash"}}<p class="notice good">{{index .Data "Flash"}}</p>{{end}}
+{{if index .Data "Invite"}}
+  <section class="panel">
+    <p class="eyebrow">One-time invitation</p>
+    <p class="share-link">{{index .Data "Invite"}}</p>
+    <p class="muted">Hand this to one person. It expires in 15 minutes and works once. It is not a public URL.</p>
+  </section>
+{{end}}
+<section class="panel stack-sm">
+  <p class="eyebrow">Circle</p>
+  <h2>{{$id.CircleName}}</h2>
+  {{if eq $id.CircleName "Personal Workspace"}}
+    <p class="muted">This circle has no name yet. It stays Personal Workspace until you name it below. A company is this circle of desks, not an account.</p>
+  {{else}}
+    <p class="muted">A company is this circle. Desks join only by invitation.</p>
+  {{end}}
+  <article class="store-card">
+    <header><h2>{{$id.DisplayName}}</h2><span class="badge good">This desk</span></header>
+    <p class="muted">Tools are built and run here.</p>
+  </article>
+</section>
+<div id="identity-panel">{{template "partials/people/identity" .}}</div>
+<section class="panel stack-sm">
+  <p class="eyebrow">Connect</p>
+  {{if $id.Connect}}
+    <p>Reachable at <span class="share-link">{{$id.Addr}}</span></p>
+    <form method="post" action="/people/connect"><input type="hidden" name="enabled" value="0"><button class="button">Turn Connect off</button></form>
+  {{else}}
+    <p class="muted">Connect is off. Other desks cannot see this one.</p>
+    <form method="post" action="/people/connect"><input type="hidden" name="enabled" value="1"><button class="button primary">Turn Connect on</button></form>
+  {{end}}
+  <p class="muted">Fingerprint {{index .Data "Short"}}. Compare it with the other desk after you connect.</p>
+</section>
+<section class="panel stack-sm">
+  <p class="eyebrow">Invite</p>
+  <form method="post" action="/people/invite"><button class="button primary">Create invitation</button></form>
+  <p class="muted">Creating an invitation turns Connect on so they have an address to reach.</p>
+  <form method="post" action="/people/accept" class="form-stack stack-sm">
+    <label>Paste an invitation<input name="invite" placeholder="code@192.168.1.20:8091" autocomplete="off" required></label>
+    <div class="actions"><button class="button">Accept invitation</button></div>
+  </form>
+</section>
+<section class="stack-sm">
+  <p class="eyebrow">Invited desks</p>
+  {{with index .Data "Peers"}}
+    {{range .}}
+    <article class="store-card">
+      <header><h2>{{.DisplayName}}</h2></header>
+      <p class="muted">{{.CircleName}} · {{.Addr}}</p>
+      <form method="post" action="/people/{{.ID}}/revoke" onsubmit="return confirm('Disconnect {{.DisplayName}}? Their links stop working.')"><button class="button danger small">Disconnect</button></form>
+    </article>
+    {{end}}
+  {{else}}
+    <div class="empty panel"><h2>No one connected</h2><p>An invitation is the only way in.</p></div>
+  {{end}}
+</section>
+{{end}}

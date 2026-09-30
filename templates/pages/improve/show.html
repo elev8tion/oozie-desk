@@ -5,9 +5,9 @@
   <h1>{{$app.Name}}</h1>
   {{if index .Data "Sent"}}
   <p class="lead">On it. The same page comes back when the fix is running.</p>
-  <div class="actions">{{if $app.PublicURL}}<a class="button primary" href="{{$app.PublicURL}}">Back to the page</a>{{end}}{{if $app.ProjectID}}<a class="button" href="/projects/{{$app.ProjectID}}/agent">Watch the agent</a>{{end}}</div>
+  <div class="actions">{{if $app.PublicURL}}<a class="button primary" href="{{$app.PublicURL}}">Back to the tool</a>{{end}}{{if $app.ProjectID}}<a class="button" href="/projects/{{$app.ProjectID}}/agent">Watch the agent</a>{{end}}</div>
   {{else}}
-  <p class="muted">One sentence. oozie rebuilds the page and opens the same URL.</p>
+  <p class="muted">One sentence. oozie rebuilds the tool and opens the same URL.</p>
   {{if index .Data "Error"}}<div class="notice error">{{index .Data "Error"}}</div>{{end}}
   <form method="post" action="/improve/{{$app.BundleSlug}}" class="form-stack">
     <label>What should be better?<textarea name="text" placeholder="The timer should flash red when it hits zero…" autofocus>{{index .Data "Text"}}</textarea></label>

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -41,8 +42,7 @@ func (h *Handlers) Make(w http.ResponseWriter, r *http.Request) {
 	text := r.FormValue("text")
 	id, err := h.service.Make(r.Context(), text)
 	if err != nil {
-		s, _ := h.service.GetSettings(r.Context())
-		h.renderer.HTML(w, 200, "layouts/base", render.ViewData{Title: "oozie", Content: "pages/make/index-content", Err: err.Error(), Theme: s.Appearance, Style: s.StyleProfile, Data: map[string]any{"Text": text}})
+		http.Redirect(w, r, "/?text="+url.QueryEscape(text)+"&err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/make/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
@@ -318,7 +318,7 @@ func (h *Handlers) Feedback(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) ImprovePage(w http.ResponseWriter, r *http.Request) {
 	app, err := h.service.AppBySlug(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		h.errorPage(w, r, 404, "No published app matches this link. Publish the project first.")
+		h.errorPage(w, r, 404, "No tool on this desk matches this link. Build it first.")
 		return
 	}
 	h.page(w, r, "Improve "+app.Name, "pages/improve/show-content", map[string]any{"App": app})
@@ -328,7 +328,7 @@ func (h *Handlers) ImproveSubmit(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	app, err := h.service.AppBySlug(r.Context(), slug)
 	if err != nil {
-		h.errorPage(w, r, 404, "No published app matches this link.")
+		h.errorPage(w, r, 404, "No tool on this desk matches this link.")
 		return
 	}
 	_ = r.ParseForm()
@@ -348,10 +348,10 @@ func (h *Handlers) Beacon(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Store(w http.ResponseWriter, r *http.Request) {
 	apps, err := h.service.ListStoreApps(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("filter"))
 	if err != nil {
-		h.errorPage(w, r, 500, "Couldn't load the store.")
+		h.errorPage(w, r, 500, "Couldn't load the tools on this desk.")
 		return
 	}
-	h.page(w, r, "Store · oozie", "pages/store/index-content", map[string]any{"Apps": apps})
+	h.page(w, r, "Tools · oozie", "pages/store/index-content", map[string]any{"Apps": apps})
 }
 func (h *Handlers) StoreResults(w http.ResponseWriter, r *http.Request) {
 	apps, _ := h.service.ListStoreApps(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("filter"))
@@ -364,10 +364,10 @@ func (h *Handlers) StoreApp(w http.ResponseWriter, r *http.Request) {
 	}
 	app, err := h.service.GetStoreApp(r.Context(), id)
 	if err != nil {
-		h.errorPage(w, r, 404, "App not found in the store.")
+		h.errorPage(w, r, 404, "That tool is not on this desk.")
 		return
 	}
-	h.page(w, r, app.Name+" · Store", "pages/store/show-content", map[string]any{"App": app})
+	h.page(w, r, app.Name+" · oozie", "pages/store/show-content", map[string]any{"App": app})
 }
 func (h *Handlers) InstallApp(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.pathID(w, r, "id")
@@ -388,7 +388,7 @@ func (h *Handlers) UninstallApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := h.service.UninstallApp(r.Context(), id)
-	flash, errMsg := "App stopped. It stays in your store.", ""
+	flash, errMsg := "Stopped. It stays on this desk.", ""
 	if err != nil {
 		flash, errMsg = "", err.Error()
 	}
@@ -406,7 +406,7 @@ func (h *Handlers) RemoveStoreApp(w http.ResponseWriter, r *http.Request) {
 		h.renderer.HTML(w, 200, "partials/store/row", render.ViewData{Err: err.Error(), Data: map[string]any{"App": app}})
 		return
 	}
-	h.renderer.HTML(w, 200, "partials/store/flash", render.ViewData{Flash: "App removed from your store. Republish the project to bring it back."})
+	h.renderer.HTML(w, 200, "partials/store/flash", render.ViewData{Flash: "Removed from this desk. Build the project again to bring it back."})
 }
 
 // ExportRecipe downloads an app as a shareable recipe file — prompts, not
@@ -468,7 +468,7 @@ func (h *Handlers) RemixApp(w http.ResponseWriter, r *http.Request) {
 	remix, err := h.service.RemixApp(r.Context(), id, r.FormValue("mutation"))
 	if err != nil {
 		app, _ := h.service.GetStoreApp(r.Context(), id)
-		h.page(w, r, app.Name+" · Store", "pages/store/show-content", map[string]any{"App": app, "Error": err.Error()})
+		h.page(w, r, app.Name+" · oozie", "pages/store/show-content", map[string]any{"App": app, "Error": err.Error()})
 		return
 	}
 	http.Redirect(w, r, "/projects/"+strconv.FormatInt(remix.ID, 10)+"/agent", http.StatusSeeOther)
@@ -491,12 +491,12 @@ func (h *Handlers) OpenApp(w http.ResponseWriter, r *http.Request) {
 }
 func (h *Handlers) InstalledApps(w http.ResponseWriter, r *http.Request) {
 	apps, _ := h.service.InstalledApps(r.Context())
-	h.page(w, r, "Installed Apps · oozie", "pages/store/installed-content", map[string]any{"Apps": apps})
+	h.page(w, r, "Running · oozie", "pages/store/installed-content", map[string]any{"Apps": apps})
 }
 
 func (h *Handlers) PublishingJobs(w http.ResponseWriter, r *http.Request) {
 	jobs, _ := h.service.ListJobs(r.Context(), r.URL.Query().Get("status"))
-	h.page(w, r, "Publishing Jobs · oozie", "pages/publishing/index-content", map[string]any{"Jobs": jobs, "Active": jobsActive(jobs)})
+	h.page(w, r, "Jobs · oozie", "pages/publishing/index-content", map[string]any{"Jobs": jobs, "Active": jobsActive(jobs)})
 }
 func (h *Handlers) PublishingJobsList(w http.ResponseWriter, r *http.Request) {
 	jobs, _ := h.service.ListJobs(r.Context(), r.URL.Query().Get("status"))
@@ -517,7 +517,7 @@ func (h *Handlers) PublishPage(w http.ResponseWriter, r *http.Request) {
 	}
 	p, _ := h.service.GetProject(r.Context(), id)
 	d, _ := h.service.GetDraft(r.Context(), id)
-	h.page(w, r, "Publish · "+p.Name, "pages/publishing/show-content", map[string]any{"Project": p, "Draft": d})
+	h.page(w, r, "Build · "+p.Name, "pages/publishing/show-content", map[string]any{"Project": p, "Draft": d})
 }
 func (h *Handlers) SaveDraft(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.pathID(w, r, "id")
@@ -556,7 +556,7 @@ func (h *Handlers) Publish(w http.ResponseWriter, r *http.Request) {
 		h.renderJobs(w, r, "", err.Error())
 		return
 	}
-	h.renderJobs(w, r, "Publishing started — building your app…", "")
+	h.renderJobs(w, r, "Building on this desk…", "")
 }
 
 func draftFromForm(projectID int64, r *http.Request) PublishDraft {

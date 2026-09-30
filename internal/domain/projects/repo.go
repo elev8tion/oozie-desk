@@ -9,7 +9,16 @@ import (
 	"time"
 )
 
-type Repo struct{ db *sql.DB }
+// Actor is the single local operator. Queries use it instead of a hardcoded user.
+type Actor struct {
+	UserID int64
+	OrgID  int64
+}
+
+type Repo struct {
+	db    *sql.DB
+	actor Actor
+}
 
 // parseSQLiteTime handles the formats SQLite emits for datetime values
 // that reach us as text (expression results have no declared type).
@@ -22,7 +31,23 @@ func parseSQLiteTime(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unrecognized time %q", s)
 }
 
-func NewRepo(db *sql.DB) *Repo { return &Repo{db: db} }
+func NewRepo(db *sql.DB) *Repo {
+	r := &Repo{db: db, actor: Actor{UserID: 1, OrgID: 1}}
+	r.loadActor(context.Background())
+	return r
+}
+
+func (r *Repo) loadActor(ctx context.Context) {
+	var userID, orgID int64
+	if err := r.db.QueryRowContext(ctx, `SELECT id FROM users ORDER BY id LIMIT 1`).Scan(&userID); err == nil && userID > 0 {
+		r.actor.UserID = userID
+	}
+	if err := r.db.QueryRowContext(ctx, `SELECT id FROM organizations ORDER BY id LIMIT 1`).Scan(&orgID); err == nil && orgID > 0 {
+		r.actor.OrgID = orgID
+	}
+}
+
+func (r *Repo) Actor() Actor { return r.actor }
 
 func (r *Repo) ListProjects(ctx context.Context, q, filter string) ([]Project, error) {
 	where := []string{"1=1"}
@@ -67,7 +92,7 @@ func (r *Repo) GetProject(ctx context.Context, id int64) (Project, error) {
 }
 
 func (r *Repo) CreateProject(ctx context.Context, name, path string, trusted bool) (Project, error) {
-	res, err := r.db.ExecContext(ctx, `INSERT INTO projects (owner_user_id, organization_id, name, project_path_display, trusted, archived, status) VALUES (1,1,?,?,?,?,?)`, name, path, trusted, false, "ready")
+	res, err := r.db.ExecContext(ctx, `INSERT INTO projects (owner_user_id, organization_id, name, project_path_display, trusted, archived, status) VALUES (?,?,?,?,?,?,?)`, r.actor.UserID, r.actor.OrgID, name, path, trusted, false, "ready")
 	if err != nil {
 		return Project{}, err
 	}
@@ -307,7 +332,7 @@ func (r *Repo) PendingPermission(ctx context.Context, projectID int64) (*Permiss
 	return &p, err
 }
 func (r *Repo) SaveFeedback(ctx context.Context, projectID int64, typ, reason, extra string) error {
-	_, err := r.db.ExecContext(ctx, `INSERT INTO feedback (project_id,user_id,feedback_type,reason,additional_feedback) VALUES (?,1,?,?,?)`, projectID, typ, reason, extra)
+	_, err := r.db.ExecContext(ctx, `INSERT INTO feedback (project_id,user_id,feedback_type,reason,additional_feedback) VALUES (?,?,?,?,?)`, projectID, r.actor.UserID, typ, reason, extra)
 	return err
 }
 
@@ -321,7 +346,7 @@ func (r *Repo) GetDraft(ctx context.Context, projectID int64) (PublishDraft, err
 	return d, err
 }
 func (r *Repo) SaveDraft(ctx context.Context, d PublishDraft) error {
-	_, err := r.db.ExecContext(ctx, `INSERT INTO publish_drafts (project_id,app_name,headline,description,changelog,publish_target,visibility,screenshot_manifest,expires_days,auto_install,organization_id,saved_at) VALUES (?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP) ON CONFLICT(project_id) DO UPDATE SET app_name=excluded.app_name,headline=excluded.headline,description=excluded.description,changelog=excluded.changelog,publish_target=excluded.publish_target,visibility=excluded.visibility,screenshot_manifest=excluded.screenshot_manifest,expires_days=excluded.expires_days,auto_install=excluded.auto_install,saved_at=CURRENT_TIMESTAMP`, d.ProjectID, d.AppName, d.Headline, d.Description, d.Changelog, d.PublishTarget, d.Visibility, d.ScreenshotManifest, d.ExpiresDays, d.AutoInstall)
+	_, err := r.db.ExecContext(ctx, `INSERT INTO publish_drafts (project_id,app_name,headline,description,changelog,publish_target,visibility,screenshot_manifest,expires_days,auto_install,organization_id,saved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(project_id) DO UPDATE SET app_name=excluded.app_name,headline=excluded.headline,description=excluded.description,changelog=excluded.changelog,publish_target=excluded.publish_target,visibility=excluded.visibility,screenshot_manifest=excluded.screenshot_manifest,expires_days=excluded.expires_days,auto_install=excluded.auto_install,organization_id=excluded.organization_id,saved_at=CURRENT_TIMESTAMP`, d.ProjectID, d.AppName, d.Headline, d.Description, d.Changelog, d.PublishTarget, d.Visibility, d.ScreenshotManifest, d.ExpiresDays, d.AutoInstall, r.actor.OrgID)
 	return err
 }
 func (r *Repo) CreateJob(ctx context.Context, projectID int64) (int64, error) {
@@ -355,7 +380,7 @@ func (r *Repo) UpsertStoreApp(ctx context.Context, projectID int64, d PublishDra
 	err := r.db.QueryRowContext(ctx, `SELECT id FROM store_apps WHERE project_id=?`, projectID).Scan(&id)
 	expiry := `CASE WHEN CAST(? AS INTEGER) > 0 THEN datetime('now', '+' || ? || ' days') ELSE NULL END`
 	if err == sql.ErrNoRows {
-		res, err := r.db.ExecContext(ctx, `INSERT INTO store_apps (project_id,organization_id,name,headline,description,visibility,published_version,last_published_at,artifact_path,bundle_slug,expires_at) VALUES (?,1,?,?,?,?,'1.0.0',CURRENT_TIMESTAMP,?,?,`+expiry+`)`, projectID, d.AppName, d.Headline, d.Description, d.Visibility, artifactPath, slug, d.ExpiresDays, d.ExpiresDays)
+		res, err := r.db.ExecContext(ctx, `INSERT INTO store_apps (project_id,organization_id,name,headline,description,visibility,published_version,last_published_at,artifact_path,bundle_slug,expires_at) VALUES (?,?,?,?,?,?,'1.0.0',CURRENT_TIMESTAMP,?,?,`+expiry+`)`, projectID, r.actor.OrgID, d.AppName, d.Headline, d.Description, d.Visibility, artifactPath, slug, d.ExpiresDays, d.ExpiresDays)
 		if err != nil {
 			return 0, err
 		}
@@ -585,7 +610,7 @@ func (r *Repo) SetRuntime(ctx context.Context, id int64, publicURL string, pid i
 	return err
 }
 func (r *Repo) InstallApp(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `INSERT OR IGNORE INTO installed_apps (store_app_id,user_id) VALUES (?,1)`, id)
+	res, err := r.db.ExecContext(ctx, `INSERT OR IGNORE INTO installed_apps (store_app_id,user_id) VALUES (?,?)`, id, r.actor.UserID)
 	if err != nil {
 		return err
 	}
@@ -600,12 +625,19 @@ func (r *Repo) InstalledApps(ctx context.Context) ([]StoreApp, error) {
 
 func (r *Repo) GetSettings(ctx context.Context) (Settings, error) {
 	var s Settings
-	err := r.db.QueryRowContext(ctx, `SELECT appearance,style_profile,fairy_enabled,fairy_hour FROM user_settings WHERE user_id=1`).Scan(&s.Appearance, &s.StyleProfile, &s.FairyEnabled, &s.FairyHour)
+	err := r.db.QueryRowContext(ctx, `SELECT appearance,style_profile,fairy_enabled,fairy_hour FROM user_settings WHERE user_id=?`, r.actor.UserID).Scan(&s.Appearance, &s.StyleProfile, &s.FairyEnabled, &s.FairyHour)
 	return s, err
 }
 func (r *Repo) SaveSettings(ctx context.Context, s Settings) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE user_settings SET appearance=?,style_profile=?,fairy_enabled=?,fairy_hour=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=1`, s.Appearance, s.StyleProfile, s.FairyEnabled, s.FairyHour)
+	_, err := r.db.ExecContext(ctx, `UPDATE user_settings SET appearance=?,style_profile=?,fairy_enabled=?,fairy_hour=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`, s.Appearance, s.StyleProfile, s.FairyEnabled, s.FairyHour, r.actor.UserID)
 	return err
+}
+
+// IndustryPack is the empty slot a later pack can fill. Empty means no extra prompt text.
+func (r *Repo) IndustryPack(ctx context.Context) string {
+	var pack string
+	_ = r.db.QueryRowContext(ctx, `SELECT industry_pack FROM organizations WHERE id=?`, r.actor.OrgID).Scan(&pack)
+	return strings.TrimSpace(pack)
 }
 
 func (r *Repo) AddWish(ctx context.Context, text string) error {

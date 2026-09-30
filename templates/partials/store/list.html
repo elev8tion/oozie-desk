@@ -2,9 +2,9 @@
 {{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
 <div class="card-grid">
 {{with index .Data "Apps"}}
-  {{range .}}{{template "partials/store/row" dict "Data" (dict "App" .)}}{{end}}
+  {{range .}}<div>{{template "partials/store/row" dict "Data" (dict "App" .)}}<div id="share-{{.ID}}" hx-get="/fragments/shares/{{.ID}}" hx-trigger="load" hx-swap="outerHTML"></div></div>{{end}}
 {{else}}
-  <div class="empty panel"><h2>No store apps</h2><p>Try another filter or seed apps in SQLite.</p></div>
+  <div class="empty panel"><h2>No tools yet</h2><p>Build one from the desk.</p></div>
 {{end}}
 </div>
 {{end}}

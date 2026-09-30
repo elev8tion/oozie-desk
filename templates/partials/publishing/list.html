@@ -3,7 +3,7 @@
 <div class="panel table-panel">
 {{with index .Data "Jobs"}}
 <table><thead><tr><th>ID</th><th>Project</th><th>Status</th><th>Error</th><th>Updated</th></tr></thead><tbody>{{range .}}{{template "partials/publishing/row" dict "Data" (dict "Job" .)}}{{end}}</tbody></table>
-{{else}}<div class="empty"><h2>No publishing jobs</h2><p>Publish a project to build it into a local web app.</p></div>{{end}}
+{{else}}<div class="empty"><h2>No jobs</h2><p>Build a tool and it runs on this desk.</p></div>{{end}}
 </div>
 {{if index .Data "Active"}}<div hx-get="/fragments/publishing/jobs" hx-trigger="load delay:2s" hx-target="#publishing-job-list" hx-swap="innerHTML"></div>{{end}}
 {{end}}

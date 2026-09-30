@@ -1,0 +1,16 @@
+{{define "partials/people/identity"}}
+{{$id := index .Data "Identity"}}
+<form class="panel form-stack" method="post" action="/settings/identity" hx-post="/settings/identity" hx-target="#identity-panel" hx-swap="innerHTML">
+  {{if .Err}}<p class="danger">{{.Err}}</p>{{end}}
+  <fieldset>
+    <legend>This desk</legend>
+    <label>First name<input name="first_name" value="{{$id.FirstName}}" maxlength="40" autocomplete="given-name"></label>
+    <label>Last initial<input name="last_initial" value="{{$id.LastInitial}}" maxlength="1" autocapitalize="characters" autocomplete="off"></label>
+    <p class="muted">Optional. First name and last initial only, such as Ken C. Leave both blank to keep Solo Builder.</p>
+    <label>Circle name<input name="circle_name" value="{{$id.CircleName}}" maxlength="80"></label>
+    <p class="muted">Leave this blank to keep Personal Workspace. Naming it does not publish anything.</p>
+    <p class="muted">Industry pack: {{if $id.IndustryPack}}{{$id.IndustryPack}}{{else}}None{{end}}. A pack, when one exists, only adds words to the build. It does not change who can connect.</p>
+    <button class="button">Save name</button>
+  </fieldset>
+</form>
+{{end}}

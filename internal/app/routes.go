@@ -3,9 +3,11 @@ package app
 import (
 	"log"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"time"
 
+	"oozie/internal/domain/hub"
 	"oozie/internal/domain/projects"
 )
 
@@ -13,13 +15,28 @@ func (a *App) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	h := projects.NewHandlers(a.service, a.renderer)
+	desk := hub.NewHandlers(a.hub, a.renderer)
 
 	static := http.StripPrefix("/static/", http.FileServerFS(a.static))
 	mux.Handle("GET /static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		static.ServeHTTP(w, r)
 	}))
-	mux.HandleFunc("GET /{$}", h.Home)
+	mux.HandleFunc("GET /{$}", desk.Desk)
+	mux.HandleFunc("GET /people", desk.People)
+	mux.HandleFunc("POST /people/invite", desk.CreateInvite)
+	mux.HandleFunc("POST /people/accept", desk.AcceptInvite)
+	mux.HandleFunc("POST /people/connect", desk.Connect)
+	mux.HandleFunc("POST /people/{id}/revoke", desk.Revoke)
+	mux.HandleFunc("GET /fragments/sidebar", desk.SidebarFragment)
+	mux.HandleFunc("GET /fragments/people/identity", desk.IdentityFragment)
+	mux.HandleFunc("POST /settings/identity", desk.SaveIdentity)
+	mux.HandleFunc("GET /fragments/shares/{id}", desk.ShareFragment)
+	mux.HandleFunc("POST /store/apps/{id}/share", desk.ActivateShare)
+	mux.HandleFunc("POST /store/apps/{id}/share/stop", desk.StopShare)
+	mux.HandleFunc("POST /inbox/{id}/accept", desk.AcceptInbox)
+	mux.HandleFunc("POST /inbox/{id}/dismiss", desk.DismissInbox)
+	mux.HandleFunc("POST /shares/accept", desk.AcceptLink)
 	mux.HandleFunc("POST /make", h.Make)
 	mux.HandleFunc("GET /make/{id}", h.MakeWait)
 	mux.HandleFunc("GET /fragments/make/{id}", h.MakeStatus)
@@ -81,7 +98,37 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /settings", h.SaveSettings)
 	mux.HandleFunc("POST /settings/taste", h.SaveTaste)
 
-	return withRecovery(withLogging(mux))
+	return withRecovery(withLogging(withDeskGuard(mux)))
+}
+
+// withDeskGuard rejects browser requests that did not come from this desk.
+// Tests and local tools that omit Origin and Sec-Fetch-Site are unchanged.
+// The published-app beacon stays open because it is a different port and
+// never carries those browser marks on a simple GET.
+func withDeskGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			http.SetCookie(w, &http.Cookie{Name: "oozie_desk", Value: "local", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+			http.Error(w, "cross-site request refused", http.StatusForbidden)
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" {
+			u, err := url.Parse(origin)
+			if err != nil || u.Host != r.Host {
+				http.Error(w, "origin refused", http.StatusForbidden)
+				return
+			}
+			if _, err := r.Cookie("oozie_desk"); err != nil {
+				http.Error(w, "open oozie and try again", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // withRecovery converts handler panics into a logged 500 instead of a

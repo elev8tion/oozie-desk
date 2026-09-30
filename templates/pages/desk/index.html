@@ -1,0 +1,54 @@
+{{define "pages/desk/index-content"}}
+{{$d := index .Data "Desk"}}
+<section class="make">
+  <p class="eyebrow">Your desk</p>
+  <h1>What should this tool do?</h1>
+  <p class="muted">One sentence. oozie builds it on this machine and opens it. Sharing stays off until you turn a link on.</p>
+  {{if $d.Err}}<p class="danger">{{$d.Err}}</p>{{end}}
+  {{if $d.Flash}}<p class="notice good">{{$d.Flash}}</p>{{end}}
+  <form method="post" action="/make" class="form-stack">
+    <label>Tool<textarea name="text" rows="4" required placeholder="A page that tracks my sourdough feedings">{{$d.Text}}</textarea></label>
+    <div class="actions"><button class="button primary">Build and open</button></div>
+  </form>
+</section>
+
+<section class="panel stack">
+  <p class="eyebrow">Shared with me</p>
+  <h2>Waiting on this desk</h2>
+  {{if $d.Inbox}}
+    {{range $d.Inbox}}
+    <article class="store-card">
+      <header><h2>{{.AppName}}</h2></header>
+      <p class="muted">{{.Headline}}</p>
+      <p class="muted">From {{.AuthorName}}</p>
+      <div class="actions">
+        <form method="post" action="/inbox/{{.ID}}/accept"><button class="button primary small">Accept and build here</button></form>
+        <form method="post" action="/inbox/{{.ID}}/dismiss"><button class="button small">Dismiss</button></form>
+      </div>
+    </article>
+    {{end}}
+  {{else}}
+    <p class="muted">Nothing shared yet. An invited desk can turn a link on, or you can paste one.</p>
+  {{end}}
+  <form method="post" action="/shares/accept" class="form-stack stack-sm">
+    <label>Internal link<input name="link" placeholder="share:…" autocomplete="off"></label>
+    <div class="actions"><button class="button">Open link</button></div>
+  </form>
+</section>
+
+<section class="stack">
+  <div class="toolbar"><div><p class="eyebrow">My tools</p><h2>On this desk</h2></div><a class="button" href="/people">People</a></div>
+  {{if $d.Apps}}
+  <div class="card-grid">
+    {{range $d.Apps}}
+    <div>
+      {{template "partials/store/row" (dict "Data" (dict "App" .))}}
+      {{template "partials/desk/share" (dict "Data" (dict "AppID" .ID "Peers" $d.Peers "Grants" $d.Grants "Connect" $d.Connect))}}
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <div class="empty panel"><h2>No tools yet</h2><p>The sentence above is the way in.</p></div>
+  {{end}}
+</section>
+{{end}}
