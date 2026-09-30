@@ -28,6 +28,7 @@ func New(config Config, database *sql.DB, renderer *render.Renderer, static fs.F
 	service.SetAgent(agent, catalog)
 	service.SetBaseURL("http://" + config.Addr)
 	service.RecoverOrphanedJobs(context.Background())
+	service.ReclaimRuntimes(context.Background())
 	clockCtx, stopClocks := context.WithCancel(context.Background())
 	service.StartBackground(clockCtx)
 	return &App{config: config, database: database, renderer: renderer, static: static, agent: agent, service: service, stopClocks: stopClocks}

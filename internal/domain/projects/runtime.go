@@ -100,6 +100,7 @@ func (s *Service) startOn(app StoreApp, port int) (string, int, bool, error) {
 }
 
 func (s *Service) halt(id int64, pid int, artifact string) {
+	s.adopted.Delete(id)
 	if v, ok := s.procs.LoadAndDelete(id); ok {
 		if cmd, ok := v.(*exec.Cmd); ok && cmd.Process != nil {
 			killPID(cmd.Process.Pid)
@@ -121,6 +122,16 @@ func (s *Service) StopRuntimes() {
 			artifact = cmd.Path
 		}
 		s.halt(id, pid, artifact)
+		return true
+	})
+	s.adopted.Range(func(k, v any) bool {
+		id, _ := k.(int64)
+		if meta, ok := v.(struct {
+			pid      int
+			artifact string
+		}); ok {
+			s.halt(id, meta.pid, meta.artifact)
+		}
 		return true
 	})
 }
@@ -244,6 +255,29 @@ func processCommand(pid int) string {
 	return strings.TrimSpace(string(out))
 }
 
+// appIsOurs returns true only if the saved URL/pid/artifact is verifiably ours:
+// PublicURL non-empty, RuntimePID>1, ArtifactPath non-empty, command contains artifact,
+// and lsof proves that pid is the TCP listener on the URL's port.
+func appIsOurs(app StoreApp) bool {
+	if app.PublicURL == "" || app.RuntimePID <= 1 || app.ArtifactPath == "" {
+		return false
+	}
+	cmd := processCommand(app.RuntimePID)
+	if cmd == "" || !strings.Contains(cmd, app.ArtifactPath) {
+		return false
+	}
+	port := portFromURL(app.PublicURL)
+	if port == 0 {
+		return false
+	}
+	// Prove listener ownership with lsof; never trust tcpUp alone.
+	out, err := exec.Command("lsof", "-nP", "-a", "-p", strconv.Itoa(app.RuntimePID), "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN").Output()
+	if err != nil || len(out) == 0 {
+		return false
+	}
+	return true
+}
+
 func overrideEnv(base []string, set map[string]string) []string {
 	out := make([]string, 0, len(base)+len(set))
 	for _, kv := range base {
@@ -289,4 +323,33 @@ func (t *tailBuf) String() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return string(t.b)
+}
+
+// ReclaimRuntimes is called at startup after RecoverOrphanedJobs.
+// It adopts still-living runtimes (for later Stop), or cleans up wedged/dead ones.
+func (s *Service) ReclaimRuntimes(ctx context.Context) {
+	apps, err := s.repo.InstalledApps(ctx)
+	if err != nil {
+		return
+	}
+	for _, app := range apps {
+		if appIsOurs(app) {
+			s.adopted.Store(app.ID, struct {
+				pid      int
+				artifact string
+			}{app.RuntimePID, app.ArtifactPath})
+			continue
+		}
+		cmd := processCommand(app.RuntimePID)
+		if cmd != "" && strings.Contains(cmd, app.ArtifactPath) {
+			// ours but not listening: wedged, halt and clean
+			s.halt(app.ID, app.RuntimePID, app.ArtifactPath)
+			_ = s.repo.SetRuntime(ctx, app.ID, "", 0)
+			_ = s.repo.UninstallApp(ctx, app.ID)
+		} else {
+			// not ours or dead: clear without killing
+			_ = s.repo.SetRuntime(ctx, app.ID, "", 0)
+			_ = s.repo.UninstallApp(ctx, app.ID)
+		}
+	}
 }

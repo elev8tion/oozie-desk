@@ -70,7 +70,7 @@ func (s *Service) MakeStatus(ctx context.Context, projectID int64) (MakeView, er
 	view.RetryURL = "/?text=" + url.QueryEscape(view.Text)
 
 	if appID, err := s.repo.StoreAppIDForProject(ctx, projectID); err == nil && appID != 0 {
-		if app, err := s.repo.GetStoreApp(ctx, appID); err == nil && app.PublicURL != "" && tcpUp(app.PublicURL) {
+		if app, err := s.repo.GetStoreApp(ctx, appID); err == nil && appIsOurs(app) {
 			view.Phase = "open"
 			view.URL = app.PublicURL
 			return view, nil

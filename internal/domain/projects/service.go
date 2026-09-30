@@ -36,6 +36,27 @@ type Service struct {
 	baseURL string   // oozie's own address, used in improve links and beacon URLs
 	procs   sync.Map // store app id -> *exec.Cmd for servers this process started
 
+	// Per-app mutexes guard Install/Uninstall/Open so two starts of same app
+	// cannot both pass halt before one stores its process.
+	appMu    sync.Mutex
+	appLocks map[int64]*sync.Mutex
+
+	// Per-project mutexes serialize publish jobs (build + optional InstallApp).
+	pubMu    sync.Mutex
+	pubLocks map[int64]*sync.Mutex
+
+	// createMu serializes default-path allocation for CreateProject.
+	createMu sync.Mutex
+
+	// slugMu serializes bundle-slug allocation across projects.
+	slugMu sync.Mutex
+
+	// onInstall is a test hook called at the very start of InstallApp.
+	onInstall func()
+
+	// adopted remembers reclaimed live runtimes so StopRuntimes can still kill them.
+	adopted sync.Map // id -> struct{pid int; artifact string}
+
 	// wishByRequest maps in-flight agent requests to the wish that spawned
 	// them (in-memory: a restart mid-build fails the wish honestly at the
 	// next startup sweep). makeByRequest is the same map for the front door.
@@ -45,6 +66,34 @@ type Service struct {
 
 func NewService(repo *Repo) *Service {
 	return &Service{repo: repo, builder: build.GoBuilder{}, baseURL: "http://127.0.0.1:8090"}
+}
+
+func (s *Service) lockApp(id int64) *sync.Mutex {
+	s.appMu.Lock()
+	if s.appLocks == nil {
+		s.appLocks = make(map[int64]*sync.Mutex)
+	}
+	m, ok := s.appLocks[id]
+	if !ok {
+		m = &sync.Mutex{}
+		s.appLocks[id] = m
+	}
+	s.appMu.Unlock()
+	return m
+}
+
+func (s *Service) lockProject(id int64) *sync.Mutex {
+	s.pubMu.Lock()
+	if s.pubLocks == nil {
+		s.pubLocks = make(map[int64]*sync.Mutex)
+	}
+	m, ok := s.pubLocks[id]
+	if !ok {
+		m = &sync.Mutex{}
+		s.pubLocks[id] = m
+	}
+	s.pubMu.Unlock()
+	return m
 }
 
 // SetBaseURL records the address published apps use to reach oozie
@@ -151,8 +200,35 @@ func (s *Service) CreateProject(ctx context.Context, name, path string, trusted 
 	if name == "" {
 		return Project{}, ErrValidation{"Project name is required."}
 	}
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
+	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 	if path == "" {
-		path = "~/Projects/" + strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+		path = "~/Projects/" + slug
+		for i := 1; ; i++ {
+			if i > 1 {
+				path = fmt.Sprintf("~/Projects/%s-%d", slug, i)
+			}
+			// check if path already used
+			ps, _ := s.repo.ListProjects(ctx, "", "")
+			used := false
+			for _, pr := range ps {
+				if pr.ProjectPathDisplay == path {
+					used = true
+					break
+				}
+			}
+			if !used {
+				return s.repo.CreateProject(ctx, name, path, trusted)
+			}
+		}
+	}
+	// explicit path: check here (repo insert does not enforce duplicate path)
+	ps, _ := s.repo.ListProjects(ctx, "", "")
+	for _, pr := range ps {
+		if pr.ProjectPathDisplay == path {
+			return Project{}, ErrValidation{"Project path already in use."}
+		}
 	}
 	return s.repo.CreateProject(ctx, name, path, trusted)
 }
@@ -462,6 +538,10 @@ func (s *Service) settleImprovement(projectID, requestID int64, status string) {
 	}
 	_ = s.repo.SetImproveStatus(ctx, imp.ID, "publishing")
 	appID := imp.StoreAppID
+	// Load draft before publish: if AutoInstall (default), the publish job itself
+	// already calls InstallApp; callback must not do it again.
+	draft, _ := s.repo.GetDraft(ctx, projectID)
+	autoInstall := draft.AutoInstall || draft.ProjectID == 0 // missing draft means default true
 	err = s.publish(ctx, projectID, func(_ int64, buildErr error) {
 		if buildErr != nil {
 			log.Printf("improve %d: republish failed: %v", imp.ID, buildErr)
@@ -469,7 +549,8 @@ func (s *Service) settleImprovement(projectID, requestID int64, status string) {
 			return
 		}
 		app, err := s.repo.GetStoreApp(ctx, appID)
-		if err == nil && app.Installed {
+		if err == nil && app.Installed && !autoInstall {
+			// Only when AutoInstall=false: callback Install picks up new binary
 			if err := s.InstallApp(ctx, appID); err != nil {
 				log.Printf("improve %d: reinstall failed: %v", imp.ID, err)
 				_ = s.repo.SetImproveStatus(ctx, imp.ID, "failed")
@@ -789,13 +870,50 @@ func (s *Service) publish(ctx context.Context, projectID int64, after func(store
 	return nil
 }
 
+// storeWithUniqueSlug keeps a project's existing slug. A new app gets
+// build.Slug(name), then name-2, name-3, ... Caller holds slugMu.
+func (s *Service) storeWithUniqueSlug(ctx context.Context, projectID int64, draft PublishDraft, appPath string) (int64, error) {
+	slug := ""
+	if appID, err := s.repo.StoreAppIDForProject(ctx, projectID); err == nil && appID != 0 {
+		if old, err := s.repo.GetStoreApp(ctx, appID); err == nil && old.BundleSlug != "" {
+			slug = old.BundleSlug
+		}
+	}
+	kept := slug != ""
+	base := build.Slug(draft.AppName)
+	for attempt := 0; attempt < 8; attempt++ {
+		if slug == "" {
+			slug = base
+			for i := 2; ; i++ {
+				_, err := s.repo.GetStoreAppBySlug(ctx, slug)
+				if errors.Is(err, sql.ErrNoRows) {
+					break
+				}
+				if err != nil {
+					return 0, err
+				}
+				slug = fmt.Sprintf("%s-%d", base, i)
+			}
+		}
+		id, err := s.repo.UpsertStoreApp(ctx, projectID, draft, appPath, slug)
+		if err != nil && !kept && strings.Contains(err.Error(), "UNIQUE") {
+			slug = ""
+			continue
+		}
+		return id, err
+	}
+	return 0, fmt.Errorf("could not allocate a unique slug for %s", draft.AppName)
+}
+
 func (s *Service) runPublishJob(jobID, projectID int64, draft PublishDraft, workdir string, after func(int64, error)) {
+	m := s.lockProject(projectID)
+	m.Lock()
+	defer m.Unlock()
 	defer s.jobs.Done()
 	ctx := context.Background()
 	if err := s.repo.SetJobRunning(ctx, jobID); err != nil {
 		log.Printf("publish job %d: %v", jobID, err)
 	}
-	slug := build.Slug(draft.AppName)
 	appPath, err := s.builder.Build(workdir, draft.AppName)
 	if err != nil {
 		_ = s.repo.FinishJob(ctx, jobID, "failed", err.Error(), nil)
@@ -804,7 +922,9 @@ func (s *Service) runPublishJob(jobID, projectID int64, draft PublishDraft, work
 		}
 		return
 	}
-	appID, err := s.repo.UpsertStoreApp(ctx, projectID, draft, appPath, slug)
+	s.slugMu.Lock()
+	appID, err := s.storeWithUniqueSlug(ctx, projectID, draft, appPath)
+	s.slugMu.Unlock()
 	if err != nil {
 		_ = s.repo.FinishJob(ctx, jobID, "failed", "app built but store update failed: "+err.Error(), nil)
 		if after != nil {
@@ -843,6 +963,12 @@ func (s *Service) GetStoreApp(ctx context.Context, id int64) (StoreApp, error) {
 // InstallApp starts the built binary on a free localhost port and marks
 // the app installed. Reinstall stops the previous process first.
 func (s *Service) InstallApp(ctx context.Context, id int64) error {
+	if s.onInstall != nil {
+		s.onInstall()
+	}
+	m := s.lockApp(id)
+	m.Lock()
+	defer m.Unlock()
 	app, err := s.repo.GetStoreApp(ctx, id)
 	if err != nil {
 		return err
@@ -867,17 +993,23 @@ func (s *Service) InstallApp(ctx context.Context, id int64) error {
 // OpenApp makes sure the installed app is listening and returns its URL.
 // A launch event is recorded so the store can show real usage.
 func (s *Service) OpenApp(ctx context.Context, id int64) (string, error) {
+	m := s.lockApp(id)
+	m.Lock()
 	app, err := s.repo.GetStoreApp(ctx, id)
 	if err != nil {
+		m.Unlock()
 		return "", err
 	}
 	if !app.Installed {
+		m.Unlock()
 		return "", ErrValidation{"Start the app first."}
 	}
-	if app.PublicURL != "" && tcpUp(app.PublicURL) {
+	if appIsOurs(app) {
 		s.RecordLaunch(ctx, app.BundleSlug)
+		m.Unlock()
 		return app.PublicURL, nil
 	}
+	m.Unlock()
 	if err := s.InstallApp(ctx, id); err != nil {
 		return "", err
 	}
@@ -892,6 +1024,9 @@ func (s *Service) OpenApp(ctx context.Context, id int64) (string, error) {
 // UninstallApp stops the local server but keeps the store listing so the
 // app can be started again.
 func (s *Service) UninstallApp(ctx context.Context, id int64) error {
+	m := s.lockApp(id)
+	m.Lock()
+	defer m.Unlock()
 	app, err := s.repo.GetStoreApp(ctx, id)
 	if err != nil {
 		return err

@@ -23,13 +23,9 @@ func (f fakeBuilder) Build(workdir, appName string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	py := "import os\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\nclass H(BaseHTTPRequestHandler):\n    def do_GET(self):\n        self.send_response(204)\n        self.end_headers()\n    def log_message(self, *args):\n        pass\nHTTPServer((\"127.0.0.1\", int(os.environ.get(\"PORT\", \"8080\"))), H).serve_forever()\n"
-	if err := os.WriteFile(filepath.Join(dir, "server.py"), []byte(py), 0o644); err != nil {
-		return "", err
-	}
 	bin := filepath.Join(dir, strings.ToLower(strings.ReplaceAll(appName, " ", "-")))
-	script := "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/server.py\"\n"
-	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+	py := "#!/usr/bin/env python3\nimport os\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\nclass H(BaseHTTPRequestHandler):\n    def do_GET(self):\n        self.send_response(204)\n        self.end_headers()\n    def log_message(self, *args):\n        pass\nHTTPServer((\"127.0.0.1\", int(os.environ.get(\"PORT\", \"8080\"))), H).serve_forever()\n"
+	if err := os.WriteFile(bin, []byte(py), 0o755); err != nil {
 		return "", err
 	}
 	return bin, nil
