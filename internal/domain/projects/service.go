@@ -62,6 +62,13 @@ type Service struct {
 	// next startup sweep). makeByRequest is the same map for the front door.
 	wishByRequest sync.Map
 	makeByRequest sync.Map
+
+	// signedIn is a test hook. Nil reads the pi auth file.
+	signedIn func() map[string]bool
+	// modelProbe tries a model. Nil means the first signed-in model is used.
+	// A rejected probe is skipped. Created test data uses this instead of pi.
+	modelProbe func(string) error
+	deadModels map[string]bool
 }
 
 func NewService(repo *Repo) *Service {
@@ -204,24 +211,13 @@ func (s *Service) CreateProject(ctx context.Context, name, path string, trusted 
 	defer s.createMu.Unlock()
 	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 	if path == "" {
-		path = "~/Projects/" + slug
-		for i := 1; ; i++ {
-			if i > 1 {
-				path = fmt.Sprintf("~/Projects/%s-%d", slug, i)
-			}
-			// check if path already used
-			ps, _ := s.repo.ListProjects(ctx, "", "")
-			used := false
-			for _, pr := range ps {
-				if pr.ProjectPathDisplay == path {
-					used = true
-					break
-				}
-			}
-			if !used {
-				return s.repo.CreateProject(ctx, name, path, trusted)
-			}
+		ps, _ := s.repo.ListProjects(ctx, "", "")
+		var err error
+		path, err = nextAutomaticPath(slug, ps)
+		if err != nil {
+			return Project{}, err
 		}
+		return s.repo.CreateProject(ctx, name, path, trusted)
 	}
 	// explicit path: check here (repo insert does not enforce duplicate path)
 	ps, _ := s.repo.ListProjects(ctx, "", "")
@@ -231,6 +227,97 @@ func (s *Service) CreateProject(ctx context.Context, name, path string, trusted 
 		}
 	}
 	return s.repo.CreateProject(ctx, name, path, trusted)
+}
+
+// nextAutomaticPath skips folders already used by a project or already
+// present on disk, so a second desk does not rebuild into the first tool.
+func nextAutomaticPath(slug string, existing []Project) (string, error) {
+	for i := 1; i <= 100; i++ {
+		path := "~/Projects/" + slug
+		if i > 1 {
+			path = fmt.Sprintf("~/Projects/%s-%d", slug, i)
+		}
+		if pathUsed(path, existing) || projectDirExists(path) {
+			continue
+		}
+		return path, nil
+	}
+	return "", ErrValidation{"Could not find a free folder for this tool."}
+}
+
+func pathUsed(path string, existing []Project) bool {
+	for _, pr := range existing {
+		if pr.ProjectPathDisplay == path {
+			return true
+		}
+	}
+	return false
+}
+
+func projectDirExists(display string) bool {
+	path, err := resolveWorkdir(Project{ProjectPathDisplay: display})
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
+}
+
+// authPath is the pi credential file. OOZIE_AUTH_PATH lets a throwaway
+// desk prove the unsigned-model gate without touching the real credentials.
+func providerOf(model string) string {
+	if i := strings.IndexByte(model, '/'); i > 0 {
+		return model[:i]
+	}
+	return ""
+}
+
+func authPath() string {
+	if p := os.Getenv("OOZIE_AUTH_PATH"); p != "" {
+		return p
+	}
+	return pi.DefaultAuthPath()
+}
+
+func (s *Service) modelForNewBuild(sessionModel string) (string, error) {
+	signed := pi.SignedProviders(authPath())
+	if s.signedIn != nil {
+		signed = s.signedIn()
+	}
+	candidates := pi.CandidateModels(s.catalog, sessionModel, signed)
+	if len(candidates) == 0 {
+		return "", ErrValidation{"This model is not signed in."}
+	}
+	var rejected bool
+	for _, model := range candidates {
+		if s.deadModels[model] || s.deadModels["provider:"+providerOf(model)] {
+			rejected = true
+			continue
+		}
+		probe := s.modelProbe
+		if probe == nil {
+			probe = pi.ProbeModel
+		}
+		err := probe(model)
+		if err == nil {
+			return model, nil
+		}
+		if !pi.ModelRejected(err.Error()) && !strings.Contains(err.Error(), "did not answer") {
+			return "", ErrValidation{err.Error()}
+		}
+		if s.deadModels == nil {
+			s.deadModels = map[string]bool{}
+		}
+		s.deadModels[model] = true
+		if provider := providerOf(model); provider != "" {
+			s.deadModels["provider:"+provider] = true
+		}
+		rejected = true
+	}
+	if rejected {
+		return "", ErrValidation{"No model answered."}
+	}
+	return "", ErrValidation{"This model is not signed in."}
 }
 func (s *Service) ArchiveProject(ctx context.Context, id int64) error {
 	return s.repo.ArchiveProject(ctx, id)
@@ -369,9 +456,14 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 	if mode != "plan" {
 		mode = "build"
 	}
-	model := session.Model
-	if model == "" {
-		model = s.catalog.DefaultModel
+	model, err := s.modelForNewBuild(session.Model)
+	if err != nil {
+		return 0, err
+	}
+	if model != session.Model {
+		if err := s.repo.SetSessionModel(ctx, session.ID, model); err != nil {
+			return 0, err
+		}
 	}
 	if session.PiSessionID == "" {
 		session.PiSessionID = newPiSessionID(projectID)

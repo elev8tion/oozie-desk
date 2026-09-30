@@ -62,6 +62,26 @@ func TestCreateProjectValidation(t *testing.T) {
 	}
 }
 
+func TestDefaultPathSkipsExistingDirectory(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, "Projects", "oozie-path-probe")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	s := newTestService(t)
+	p, err := s.CreateProject(context.Background(), "oozie-path-probe", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ProjectPathDisplay != "~/Projects/oozie-path-probe-2" {
+		t.Fatalf("reused an existing folder: %s", p.ProjectPathDisplay)
+	}
+}
+
 func TestPublishWithoutDraftUsesDefaults(t *testing.T) {
 	ctx := context.Background()
 	s := newTestService(t)

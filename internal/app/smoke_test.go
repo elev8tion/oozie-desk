@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -73,6 +74,41 @@ func TestPagesRender(t *testing.T) {
 		if c.want != 200 && !strings.Contains(rec.Body.String(), "Back to Projects") {
 			t.Errorf("GET %s error page is not styled", c.path)
 		}
+	}
+}
+
+func TestMakeUnsignedModelStopsAtTheFrontDoor(t *testing.T) {
+	auth := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(auth, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OOZIE_AUTH_PATH", auth)
+	handler := newTestServer(t)
+
+	form := strings.NewReader("text=A+page+that+says+hello")
+	req := httptest.NewRequest("POST", "/make", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 303 {
+		t.Fatalf("make = %d, want 303", rec.Code)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.Contains(loc, "err=This+model+is+not+signed+in.") {
+		t.Fatalf("location = %s", loc)
+	}
+
+	req = httptest.NewRequest("GET", loc, nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "This model is not signed in.") {
+		t.Fatalf("desk did not show the sentence: %d", rec.Code)
+	}
+	req = httptest.NewRequest("GET", "/projects", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), "Page Says Hello") {
+		t.Fatalf("a project was created:\n%s", rec.Body.String())
 	}
 }
 

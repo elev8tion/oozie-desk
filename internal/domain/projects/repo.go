@@ -491,6 +491,15 @@ func (r *Repo) LatestRequest(ctx context.Context, projectID int64) (status, errM
 	return status, errMsg, nil
 }
 
+// LatestActivity is the newest agent line for a project, used by the waiting screen.
+func (r *Repo) LatestActivity(ctx context.Context, projectID int64) (role, status, content string, err error) {
+	err = r.db.QueryRowContext(ctx, `SELECT m.role, m.status, m.content FROM agent_messages m JOIN agent_requests r ON r.id=m.request_id JOIN agent_sessions s ON s.id=r.session_id WHERE s.project_id=? ORDER BY m.id DESC LIMIT 1`, projectID).Scan(&role, &status, &content)
+	if err == sql.ErrNoRows {
+		return "", "", "", nil
+	}
+	return role, status, content, err
+}
+
 func (r *Repo) ListJobs(ctx context.Context, status string) ([]PublishingJob, error) {
 	q := `SELECT j.id,j.project_id,p.name,j.store_app_id,j.status,j.error_message,j.created_at,j.updated_at FROM publishing_jobs j JOIN projects p ON p.id=j.project_id`
 	args := []any{}

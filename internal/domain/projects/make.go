@@ -19,6 +19,7 @@ type MakeView struct {
 	Error     string
 	Text      string
 	RetryURL  string
+	Line      string
 }
 
 // Make is the front door: one sentence becomes a trusted project, an agent
@@ -27,6 +28,9 @@ func (s *Service) Make(ctx context.Context, text string) (int64, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0, ErrValidation{"Describe the page."}
+	}
+	if _, err := s.modelForNewBuild(""); err != nil {
+		return 0, err
 	}
 	name := wishProjectName(text)
 	if strings.HasPrefix(name, "Wish ") {
@@ -100,6 +104,14 @@ func (s *Service) MakeStatus(ctx context.Context, projectID int64) (MakeView, er
 		}
 		return view, nil
 	}
+	view.Line = "Starting."
+	if jobErr == nil && (job.Status == "queued" || job.Status == "running") {
+		view.Line = "Starting the page."
+		return view, nil
+	}
+	if role, toolStatus, content, err := s.repo.LatestActivity(ctx, projectID); err == nil {
+		view.Line = buildProgress(role, toolStatus, content)
+	}
 	return view, nil
 }
 
@@ -138,10 +150,32 @@ Request:
 %s`, text)
 }
 
+func buildProgress(role, status, content string) string {
+	text := strings.ToLower(content)
+	switch {
+	case strings.Contains(text, "go build"), strings.Contains(text, "go test"):
+		return "Checking the build."
+	case strings.HasPrefix(text, "write"), strings.HasPrefix(text, "edit"), strings.Contains(text, "main.go"):
+		return "Writing the page."
+	case role == "assistant" && strings.TrimSpace(content) != "":
+		return "Writing the page."
+	case role == "tool" || strings.Contains(text, "bash") || status == "running":
+		return "Running a check."
+	default:
+		return "Starting."
+	}
+}
+
 func plainPageError(msg string) string {
 	msg = strings.TrimSpace(msg)
 	if msg == "" {
 		return ""
+	}
+	if strings.Contains(msg, "No API key") || strings.Contains(msg, "not signed in") {
+		return "This model is not signed in."
+	}
+	if strings.Contains(strings.ToLower(msg), "not found") || strings.Contains(msg, "404") {
+		return "No model answered."
 	}
 	if strings.Contains(msg, "no go.mod") || strings.Contains(msg, "without producing") {
 		return "The agent finished without a page to open."

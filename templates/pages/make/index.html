@@ -30,7 +30,7 @@
     <p class="danger">{{$st.Error}}</p>
     <p><a class="button" href="{{$st.RetryURL}}">Try another sentence</a></p>
   {{else}}
-    <p>Building… this stays here until the page is open.</p>
+    <p>{{if $st.Line}}{{$st.Line}}{{else}}Starting.{{end}}</p>
   {{end}}
 </div>
 {{end}}
