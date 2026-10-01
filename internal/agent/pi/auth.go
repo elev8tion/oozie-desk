@@ -134,6 +134,8 @@ func sortBuildModels(models []string) {
 func modelCostScore(full string) int {
 	l := strings.ToLower(full)
 	switch {
+	case strings.Contains(l, ":free"), strings.HasSuffix(l, "/free"):
+		return -1 // OpenRouter free tier before paid cheap models
 	case strings.Contains(l, "haiku"), strings.Contains(l, "flash"), strings.Contains(l, "mini"), strings.Contains(l, "small"):
 		return 0
 	case strings.Contains(l, "sonnet"), strings.Contains(l, "gpt-4"), strings.Contains(l, "gemini-2"):

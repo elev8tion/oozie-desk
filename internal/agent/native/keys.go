@@ -172,6 +172,7 @@ func splitFull(full string) (pi.ModelOption, bool) {
 // DefaultCatalog is used when pi settings are missing so the desk still has models.
 func DefaultCatalog() pi.Catalog {
 	models := []string{
+		"openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
 		"openrouter/anthropic/claude-haiku-4.5",
 		"openrouter/google/gemini-2.5-flash",
 		"openrouter/anthropic/claude-sonnet-4.6",
