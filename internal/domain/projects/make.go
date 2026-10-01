@@ -272,6 +272,9 @@ func plainPageError(msg string) string {
 	if strings.Contains(msg, "No API key") || strings.Contains(msg, "not signed in") {
 		return "This model is not signed in."
 	}
+	if strings.Contains(strings.ToLower(msg), "credit") || strings.Contains(msg, "max_tokens") {
+		return "This model needs more credits. Try another model or top up the provider."
+	}
 	if strings.Contains(strings.ToLower(msg), "not found") || strings.Contains(msg, "404") {
 		return "No model answered."
 	}

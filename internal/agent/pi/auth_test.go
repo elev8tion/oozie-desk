@@ -59,6 +59,21 @@ func TestCandidateModelsSkipsUnsigned(t *testing.T) {
 	}
 }
 
+func TestCandidateModelsPrefersCheaper(t *testing.T) {
+	c := Catalog{
+		DefaultModel: "openrouter/anthropic/claude-sonnet-4.6",
+		Models: []ModelOption{
+			{Provider: "openrouter", ID: "anthropic/claude-sonnet-4.6", Full: "openrouter/anthropic/claude-sonnet-4.6"},
+			{Provider: "openrouter", ID: "anthropic/claude-haiku-4.5", Full: "openrouter/anthropic/claude-haiku-4.5"},
+			{Provider: "xai", ID: "grok-3-mini", Full: "xai/grok-3-mini"},
+		},
+	}
+	got := CandidateModels(c, "", map[string]bool{"openrouter": true, "xai": true})
+	if len(got) < 2 || got[0] != "openrouter/anthropic/claude-haiku-4.5" {
+		t.Fatalf("want haiku first, got %#v", got)
+	}
+}
+
 func TestModelRejected(t *testing.T) {
 	if !ModelRejected(`404 {"error":{"message":"Not Found","code":404}}`) {
 		t.Fatal("404 should be a rejected model")

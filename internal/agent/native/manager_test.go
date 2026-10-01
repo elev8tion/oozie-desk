@@ -54,10 +54,14 @@ func (m *memSink) AgentError(_, _ int64, message string) {
 func TestManagerToolLoop(t *testing.T) {
 	dir := t.TempDir()
 	var calls int
+	var sawMaxTokens int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		var req chatRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.MaxTokens > 0 {
+			sawMaxTokens = req.MaxTokens
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if calls == 1 {
 			// ask to write a file
@@ -132,6 +136,9 @@ func TestManagerToolLoop(t *testing.T) {
 	}
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
+	if sawMaxTokens != 1024 {
+		t.Fatalf("max_tokens=%d want 1024", sawMaxTokens)
+	}
 	if sink.settled != "completed" {
 		t.Fatalf("settled=%q errs=%v", sink.settled, sink.errs)
 	}

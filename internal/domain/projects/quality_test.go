@@ -114,7 +114,8 @@ func TestMakeSkipsAModelThatDoesNotAnswer(t *testing.T) {
 	if got != "xai/grok-4.3" {
 		t.Fatalf("chose %s, tried %#v", got, tried)
 	}
-	if len(tried) != 2 || tried[0] != "openrouter/anthropic/claude-sonnet-4.6" || tried[1] != "xai/grok-4.3" {
+	// Cheap models first; one openrouter rejection marks the provider dead, then xai.
+	if len(tried) != 2 || tried[0] != "openrouter/anthropic/claude-haiku-4.5" || tried[1] != "xai/grok-4.3" {
 		t.Fatalf("probes = %#v", tried)
 	}
 

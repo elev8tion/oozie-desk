@@ -74,7 +74,9 @@ func modelSigned(full string, signed map[string]bool) bool {
 }
 
 // CandidateModels lists signed-in models to try, session first, then the
-// default, then the enabled list. Duplicates are dropped.
+// default, then the enabled list. Duplicates are dropped. After the session
+// pick, cheaper coding models (haiku/flash/mini) are preferred so thin
+// credit balances still build tools.
 func CandidateModels(c Catalog, sessionModel string, signed map[string]bool) []string {
 	var out []string
 	add := func(full string) {
@@ -89,11 +91,56 @@ func CandidateModels(c Catalog, sessionModel string, signed map[string]bool) []s
 		out = append(out, full)
 	}
 	add(sessionModel)
-	add(c.DefaultModel)
-	for _, m := range c.Models {
-		add(m.Full)
+	var rest []string
+	push := func(full string) {
+		if !modelSigned(full, signed) {
+			return
+		}
+		for _, have := range out {
+			if have == full {
+				return
+			}
+		}
+		for _, have := range rest {
+			if have == full {
+				return
+			}
+		}
+		rest = append(rest, full)
 	}
+	push(c.DefaultModel)
+	for _, m := range c.Models {
+		push(m.Full)
+	}
+	sortBuildModels(rest)
+	out = append(out, rest...)
 	return out
+}
+
+func sortBuildModels(models []string) {
+	if len(models) < 2 {
+		return
+	}
+	// Stable insertion by cheapness score (lower first).
+	for i := 1; i < len(models); i++ {
+		j := i
+		for j > 0 && modelCostScore(models[j]) < modelCostScore(models[j-1]) {
+			models[j], models[j-1] = models[j-1], models[j]
+			j--
+		}
+	}
+}
+
+func modelCostScore(full string) int {
+	l := strings.ToLower(full)
+	switch {
+	case strings.Contains(l, "haiku"), strings.Contains(l, "flash"), strings.Contains(l, "mini"), strings.Contains(l, "small"):
+		return 0
+	case strings.Contains(l, "sonnet"), strings.Contains(l, "gpt-4"), strings.Contains(l, "gemini-2"):
+		return 1
+	default:
+		return 2
+	}
 }
 
 // ProbeModel asks pi if this model answers. A 404 or missing key is a rejection.
@@ -151,5 +198,5 @@ func ProbeModel(model string) error {
 // ModelRejected reports a model that is signed in but did not answer.
 func ModelRejected(msg string) bool {
 	msg = strings.ToLower(msg)
-	return strings.Contains(msg, "not found") || strings.Contains(msg, "404") || strings.Contains(msg, "no api key") || strings.Contains(msg, "no models match")
+	return strings.Contains(msg, "not found") || strings.Contains(msg, "404") || strings.Contains(msg, "no api key") || strings.Contains(msg, "no models match") || strings.Contains(msg, "credit") || strings.Contains(msg, "insufficient") || strings.Contains(msg, "max_tokens")
 }

@@ -25,8 +25,10 @@ func (c *ChatClient) http() *http.Client {
 }
 
 type chatMessage struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
+	Role string `json:"role"`
+	// Content must serialize even when empty — OpenRouter/Anthropic reject
+	// assistant/tool turns that omit the text field after tool_calls.
+	Content    string     `json:"content"`
 	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 	Name       string     `json:"name,omitempty"`
@@ -48,6 +50,9 @@ type chatRequest struct {
 	Messages   []chatMessage `json:"messages"`
 	Tools      []toolDef     `json:"tools,omitempty"`
 	ToolChoice any           `json:"tool_choice,omitempty"`
+	// Cap completion size. Omitting this lets some providers (OpenRouter)
+	// assume a huge default and refuse low-credit accounts.
+	MaxTokens int `json:"max_tokens,omitempty"`
 }
 
 type toolDef struct {
@@ -86,6 +91,8 @@ func (c *ChatClient) Complete(ctx context.Context, fullModel string, messages []
 		Messages:   messages,
 		Tools:      codingTools(),
 		ToolChoice: "auto",
+		// Keep under thin OpenRouter credit ceilings; tool loops use many turns.
+		MaxTokens: 1024,
 	})
 	if err != nil {
 		return chatMessage{}, nil, err

@@ -859,6 +859,24 @@ func (s *Service) AgentError(projectID, requestID int64, message string) {
 	if err := s.repo.InsertMessage(context.Background(), requestID, "system", "error", message); err != nil {
 		log.Printf("persist agent error (project %d): %v", projectID, err)
 	}
+	// Skip this model (and the whole provider on credit/quota refusals) next Make.
+	if !pi.ModelRejected(message) {
+		return
+	}
+	session, err := s.repo.GetSession(context.Background(), projectID)
+	if err != nil || session.Model == "" {
+		return
+	}
+	if s.deadModels == nil {
+		s.deadModels = map[string]bool{}
+	}
+	s.deadModels[session.Model] = true
+	low := strings.ToLower(message)
+	if strings.Contains(low, "credit") || strings.Contains(low, "insufficient") || strings.Contains(low, "max_tokens") {
+		if p := providerOf(session.Model); p != "" {
+			s.deadModels["provider:"+p] = true
+		}
+	}
 }
 
 func projectWorkdir(p Project) (string, error) {
