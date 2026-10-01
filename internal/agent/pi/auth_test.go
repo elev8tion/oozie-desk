@@ -78,6 +78,12 @@ func TestModelRejected(t *testing.T) {
 	if !ModelRejected(`404 {"error":{"message":"Not Found","code":404}}`) {
 		t.Fatal("404 should be a rejected model")
 	}
+	if !ModelRejected("Upstream error from Nvidia: Service temporarily overloaded") {
+		t.Fatal("overloaded upstream should be a rejected model")
+	}
+	if !ModelRejected("rate limit exceeded") {
+		t.Fatal("rate limit should be a rejected model")
+	}
 	if ModelRejected("connection reset") {
 		t.Fatal("unrelated error was treated as a dead model")
 	}

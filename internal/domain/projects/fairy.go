@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode"
 
+	"oozie/internal/agent/pi"
 	"oozie/internal/build"
 )
 
@@ -65,16 +66,23 @@ func (s *Service) BuildWish(ctx context.Context, id int64) (int64, error) {
 
 // settleWish closes the fairy loop: agent done → publish → wish granted.
 func (s *Service) settleWish(projectID, requestID int64, status string) {
-	v, ok := s.wishByRequest.LoadAndDelete(requestID)
+	v, ok := s.wishByRequest.Load(requestID)
 	if !ok {
 		return
 	}
 	wishID := v.(int64)
 	ctx := context.Background()
 	if status != "completed" {
+		if s.retryWishAfterModel(ctx, projectID, requestID, wishID) {
+			return
+		}
+		s.wishByRequest.Delete(requestID)
+		s.wishRetryN.Delete(wishID)
 		_ = s.repo.SettleWish(ctx, wishID, "failed", "the agent run ended with status "+status)
 		return
 	}
+	s.wishByRequest.Delete(requestID)
+	s.wishRetryN.Delete(wishID)
 	// If the agent finished without leaving anything buildable (it may
 	// have declined the wish), fail with its own words instead of the
 	// misleading "no go.mod" publish error.
@@ -96,6 +104,40 @@ func (s *Service) settleWish(projectID, requestID int64, status string) {
 	if err != nil {
 		_ = s.repo.SettleWish(ctx, wishID, "failed", "publish could not start: "+err.Error())
 	}
+}
+
+const maxWishModelRetries = 4
+
+// retryWishAfterModel hops a wish build to the next model after overload/credit.
+func (s *Service) retryWishAfterModel(ctx context.Context, projectID, requestID, wishID int64) bool {
+	n := 0
+	if v, ok := s.wishRetryN.Load(wishID); ok {
+		n, _ = v.(int)
+	}
+	if n >= maxWishModelRetries {
+		return false
+	}
+	_, errMsg, err := s.repo.RequestStatus(ctx, requestID)
+	if err != nil || !pi.ModelRejected(errMsg) {
+		return false
+	}
+	if session, err := s.repo.GetSession(ctx, projectID); err == nil && session.ID != 0 {
+		_ = s.repo.SetSessionModel(ctx, session.ID, "")
+	}
+	msg, err := s.repo.FirstUserMessage(ctx, requestID)
+	if err != nil || strings.TrimSpace(msg) == "" {
+		return false
+	}
+	s.wishByRequest.Delete(requestID)
+	newID, err := s.sendAgentMessage(ctx, projectID, "build", msg)
+	if err != nil || newID == 0 {
+		s.wishRetryN.Store(wishID, n+1)
+		return false
+	}
+	s.wishRetryN.Store(wishID, n+1)
+	s.wishByRequest.Store(newID, wishID)
+	log.Printf("wish %d: model refusal on request %d — retrying as request %d (attempt %d)", wishID, requestID, newID, n+1)
+	return true
 }
 
 // fairyLoop wakes every minute; at the configured hour it takes up to

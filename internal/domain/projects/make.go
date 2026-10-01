@@ -185,6 +185,10 @@ func (s *Service) ImproveStatus(ctx context.Context, requestID int64) (ImproveVi
 		RetryURL:  "/improve/" + app.BundleSlug,
 		Line:      "Starting the fix.",
 	}
+	liveRequestID := requestID
+	if v, ok := s.improveCurrent.Load(requestID); ok {
+		liveRequestID = v.(int64)
+	}
 	switch imp.Status {
 	case "done":
 		view.Phase = "open"
@@ -193,7 +197,7 @@ func (s *Service) ImproveStatus(ctx context.Context, requestID int64) (ImproveVi
 	case "failed":
 		view.Phase = "failed"
 		view.Error = "The fix did not land. Try another sentence."
-		if status, msg, rerr := s.repo.RequestStatus(ctx, requestID); rerr == nil && (status == "failed" || status == "cancelled") {
+		if status, msg, rerr := s.repo.RequestStatus(ctx, liveRequestID); rerr == nil && (status == "failed" || status == "cancelled") {
 			if plain := plainPageError(msg); plain != "" {
 				view.Error = plain
 			}
@@ -203,8 +207,14 @@ func (s *Service) ImproveStatus(ctx context.Context, requestID int64) (ImproveVi
 		view.Line = "Starting the tool."
 		return view, nil
 	}
-	if status, msg, err := s.repo.RequestStatus(ctx, requestID); err == nil {
+	if status, msg, err := s.repo.RequestStatus(ctx, liveRequestID); err == nil {
 		if status == "failed" || status == "cancelled" {
+			// A model hop may still be spinning up; only fail the wait screen
+			// when improve itself is marked failed.
+			if _, still := s.improveCurrent.Load(requestID); still && liveRequestID != requestID {
+				view.Line = "Trying another model."
+				return view, nil
+			}
 			view.Phase = "failed"
 			view.Error = plainPageError(msg)
 			if view.Error == "" {
@@ -269,9 +279,7 @@ func (s *Service) retryMakeAfterCredit(ctx context.Context, projectID, requestID
 	if err != nil {
 		return false
 	}
-	low := strings.ToLower(errMsg)
-	if !strings.Contains(low, "credit") && !strings.Contains(low, "insufficient") &&
-		!strings.Contains(low, "max_tokens") && !strings.Contains(low, "quota") {
+	if !pi.ModelRejected(errMsg) {
 		return false
 	}
 	// AgentError already marked the dead model/provider; clear sticky session
@@ -292,7 +300,7 @@ func (s *Service) retryMakeAfterCredit(ctx context.Context, projectID, requestID
 	}
 	s.makeCreditRetry.Store(projectID, n+1)
 	s.trackFrontDoor(newID, projectID)
-	log.Printf("make project %d: credit refusal on request %d — retrying as request %d (attempt %d)", projectID, requestID, newID, n+1)
+	log.Printf("make project %d: model refusal on request %d — retrying as request %d (attempt %d)", projectID, requestID, newID, n+1)
 	return true
 }
 

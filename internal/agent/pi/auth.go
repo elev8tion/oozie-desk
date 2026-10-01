@@ -198,7 +198,25 @@ func ProbeModel(model string) error {
 }
 
 // ModelRejected reports a model that is signed in but did not answer.
+// Includes credit/quota refusals and transient upstream capacity errors so
+// the desk can hop to the next signed-in model.
 func ModelRejected(msg string) bool {
 	msg = strings.ToLower(msg)
-	return strings.Contains(msg, "not found") || strings.Contains(msg, "404") || strings.Contains(msg, "no api key") || strings.Contains(msg, "no models match") || strings.Contains(msg, "credit") || strings.Contains(msg, "insufficient") || strings.Contains(msg, "max_tokens")
+	return strings.Contains(msg, "not found") ||
+		strings.Contains(msg, "404") ||
+		strings.Contains(msg, "no api key") ||
+		strings.Contains(msg, "no models match") ||
+		strings.Contains(msg, "credit") ||
+		strings.Contains(msg, "insufficient") ||
+		strings.Contains(msg, "max_tokens") ||
+		strings.Contains(msg, "quota") ||
+		strings.Contains(msg, "overloaded") ||
+		strings.Contains(msg, "rate limit") ||
+		strings.Contains(msg, "rate_limit") ||
+		strings.Contains(msg, "too many requests") ||
+		strings.Contains(msg, "429") ||
+		strings.Contains(msg, "503") ||
+		strings.Contains(msg, "temporarily unavailable") ||
+		strings.Contains(msg, "service unavailable") ||
+		strings.Contains(msg, "capacity")
 }

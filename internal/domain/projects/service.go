@@ -79,6 +79,12 @@ type Service struct {
 	// makeCreditRetry counts automatic front-door re-prompts after credit/quota
 	// refusals per project (capped in retryMakeAfterCredit).
 	makeCreditRetry sync.Map
+	// improveOrigin maps a retry agent request → the Fix wait request id.
+	// improveCurrent maps the Fix wait request id → the live agent request.
+	improveOrigin  sync.Map
+	improveCurrent sync.Map
+	improveRetryN  sync.Map // origin request id → hop count
+	wishRetryN     sync.Map // wish id → hop count
 
 	// signedIn is a test hook. Nil reads the pi auth file.
 	signedIn func() map[string]bool
@@ -667,14 +673,27 @@ func (s *Service) RequestSettled(projectID, requestID int64, status string) {
 // the factory.
 func (s *Service) settleImprovement(projectID, requestID int64, status string) {
 	ctx := context.Background()
-	imp, err := s.repo.ImproveByRequest(ctx, requestID)
+	originID := requestID
+	if v, ok := s.improveOrigin.Load(requestID); ok {
+		originID = v.(int64)
+	}
+	imp, err := s.repo.ImproveByRequest(ctx, originID)
 	if err != nil || imp == nil {
 		return
 	}
 	if status != "completed" {
+		if s.retryImproveAfterModel(ctx, projectID, originID, requestID, imp) {
+			return
+		}
 		_ = s.repo.SetImproveStatus(ctx, imp.ID, "failed")
+		s.improveOrigin.Delete(requestID)
+		s.improveCurrent.Delete(originID)
+		s.improveRetryN.Delete(originID)
 		return
 	}
+	s.improveOrigin.Delete(requestID)
+	s.improveCurrent.Delete(originID)
+	s.improveRetryN.Delete(originID)
 	_ = s.repo.SetImproveStatus(ctx, imp.ID, "publishing")
 	appID := imp.StoreAppID
 	// Load draft before publish: if AutoInstall (default), the publish job itself
@@ -702,6 +721,42 @@ func (s *Service) settleImprovement(projectID, requestID int64, status string) {
 		log.Printf("improve %d: publish: %v", imp.ID, err)
 		_ = s.repo.SetImproveStatus(ctx, imp.ID, "failed")
 	}
+}
+
+const maxImproveModelRetries = 4
+
+// retryImproveAfterModel hops Fix to the next signed-in model when the current
+// one is refused (credits, overload). The Fix wait URL keeps the origin request id.
+func (s *Service) retryImproveAfterModel(ctx context.Context, projectID, originID, failedID int64, imp *ImproveRequest) bool {
+	n := 0
+	if v, ok := s.improveRetryN.Load(originID); ok {
+		n, _ = v.(int)
+	}
+	if n >= maxImproveModelRetries {
+		return false
+	}
+	_, errMsg, err := s.repo.RequestStatus(ctx, failedID)
+	if err != nil || !pi.ModelRejected(errMsg) {
+		return false
+	}
+	if session, err := s.repo.GetSession(ctx, projectID); err == nil && session.ID != 0 {
+		_ = s.repo.SetSessionModel(ctx, session.ID, "")
+	}
+	msg, err := s.repo.FirstUserMessage(ctx, failedID)
+	if err != nil || strings.TrimSpace(msg) == "" {
+		return false
+	}
+	newID, err := s.sendAgentMessage(ctx, projectID, "build", msg)
+	if err != nil || newID == 0 {
+		s.improveRetryN.Store(originID, n+1)
+		return false
+	}
+	s.improveRetryN.Store(originID, n+1)
+	s.improveOrigin.Store(newID, originID)
+	s.improveCurrent.Store(originID, newID)
+	s.improveOrigin.Delete(failedID)
+	log.Printf("improve origin %d: model refusal on request %d — retrying as request %d (attempt %d)", originID, failedID, newID, n+1)
+	return true
 }
 
 // RemixApp forks a published app into a new project — source copied,
