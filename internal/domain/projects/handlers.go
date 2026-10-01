@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"oozie/internal/web/render"
+	"oozie-desk/internal/web/render"
 )
 
 type Handlers struct {
@@ -31,7 +31,7 @@ func (h *Handlers) page(w http.ResponseWriter, r *http.Request, title, content s
 // errorPage renders a styled error page in the layout.
 func (h *Handlers) errorPage(w http.ResponseWriter, r *http.Request, status int, message string) {
 	s, _ := h.service.GetSettings(r.Context())
-	h.renderer.HTML(w, status, "layouts/base", render.ViewData{Title: "Error · oozie", Content: "pages/error-content", Theme: s.Appearance, Style: s.StyleProfile, Data: map[string]any{"Code": status, "Message": message}})
+	h.renderer.HTML(w, status, "layouts/base", render.ViewData{Title: "Error · Oozie Desk", Content: "pages/error-content", Theme: s.Appearance, Style: s.StyleProfile, Data: map[string]any{"Code": status, "Message": message}})
 }
 
 // NotFound is the desk page for a path that matches no route.
@@ -68,7 +68,7 @@ func (h *Handlers) MakeWait(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, st.URL, http.StatusSeeOther)
 		return
 	}
-	h.page(w, r, st.Name+" · oozie", "pages/make/wait-content", map[string]any{"Status": st})
+	h.page(w, r, st.Name+" · Oozie Desk", "pages/make/wait-content", map[string]any{"Status": st})
 }
 
 // RunApp starts the tool if needed and shows it inside the desk chrome so
@@ -88,7 +88,7 @@ func (h *Handlers) RunApp(w http.ResponseWriter, r *http.Request) {
 		h.errorPage(w, r, 404, "That tool is not on this desk.")
 		return
 	}
-	h.page(w, r, app.Name+" · oozie", "pages/run/show-content", map[string]any{"App": app, "URL": url})
+	h.page(w, r, app.Name+" · Oozie Desk", "pages/run/show-content", map[string]any{"App": app, "URL": url})
 }
 
 func (h *Handlers) MakeStatus(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +116,7 @@ func (h *Handlers) Projects(w http.ResponseWriter, r *http.Request) {
 		h.errorPage(w, r, 500, "Couldn't load projects.")
 		return
 	}
-	h.page(w, r, "Projects · oozie", "pages/projects/index-content", map[string]any{"Projects": ps, "Q": r.URL.Query().Get("q"), "Filter": r.URL.Query().Get("filter"), "Insights": h.service.Insights(r.Context())})
+	h.page(w, r, "Projects · Oozie Desk", "pages/projects/index-content", map[string]any{"Projects": ps, "Q": r.URL.Query().Get("q"), "Filter": r.URL.Query().Get("filter"), "Insights": h.service.Insights(r.Context())})
 }
 func (h *Handlers) ProjectsList(w http.ResponseWriter, r *http.Request) {
 	ps, err := h.service.ListProjects(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("filter"))
@@ -127,7 +127,7 @@ func (h *Handlers) ProjectsList(w http.ResponseWriter, r *http.Request) {
 	h.renderer.HTML(w, 200, "partials/projects/list", render.ViewData{Data: map[string]any{"Projects": ps}})
 }
 func (h *Handlers) NewProject(w http.ResponseWriter, r *http.Request) {
-	h.page(w, r, "New Project · oozie", "pages/projects/new-content", nil)
+	h.page(w, r, "New Project · Oozie Desk", "pages/projects/new-content", nil)
 }
 func (h *Handlers) CreateProject(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -156,7 +156,7 @@ func (h *Handlers) ShowProject(w http.ResponseWriter, r *http.Request) {
 		h.errorPage(w, r, 404, "Project not found.")
 		return
 	}
-	h.page(w, r, p.Name+" · oozie", "pages/projects/show-content", map[string]any{"Project": p})
+	h.page(w, r, p.Name+" · Oozie Desk", "pages/projects/show-content", map[string]any{"Project": p})
 }
 
 // SetTrusted toggles a project between trusted (agent runs unattended)
@@ -372,7 +372,7 @@ func (h *Handlers) ImproveWait(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, st.URL, http.StatusSeeOther)
 		return
 	}
-	h.page(w, r, st.Name+" · oozie", "pages/improve/wait-content", map[string]any{"Status": st})
+	h.page(w, r, st.Name+" · Oozie Desk", "pages/improve/wait-content", map[string]any{"Status": st})
 }
 
 func (h *Handlers) ImproveStatus(w http.ResponseWriter, r *http.Request) {
@@ -403,7 +403,7 @@ func (h *Handlers) Store(w http.ResponseWriter, r *http.Request) {
 		h.errorPage(w, r, 500, "Couldn't load the tools on this desk.")
 		return
 	}
-	h.page(w, r, "Tools · oozie", "pages/store/index-content", map[string]any{
+	h.page(w, r, "Tools · Oozie Desk", "pages/store/index-content", map[string]any{
 		"Apps": apps, "Q": r.URL.Query().Get("q"), "Filter": r.URL.Query().Get("filter"),
 	})
 }
@@ -421,7 +421,7 @@ func (h *Handlers) StoreApp(w http.ResponseWriter, r *http.Request) {
 		h.errorPage(w, r, 404, "That tool is not on this desk.")
 		return
 	}
-	h.page(w, r, app.Name+" · oozie", "pages/store/show-content", map[string]any{"App": app})
+	h.page(w, r, app.Name+" · Oozie Desk", "pages/store/show-content", map[string]any{"App": app})
 }
 func (h *Handlers) InstallApp(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.pathID(w, r, "id")
@@ -489,7 +489,7 @@ func (h *Handlers) ExportRecipe(w http.ResponseWriter, r *http.Request) {
 // and export any published app as a recipe file.
 func (h *Handlers) ImportRecipePage(w http.ResponseWriter, r *http.Request) {
 	apps, _ := h.service.ListStoreApps(r.Context(), "", "")
-	h.page(w, r, "Recipes · oozie", "pages/recipes/import-content", map[string]any{
+	h.page(w, r, "Recipes · Oozie Desk", "pages/recipes/import-content", map[string]any{
 		"Apps":  apps,
 		"Error": r.URL.Query().Get("err"),
 		"Link":  r.URL.Query().Get("link"),
@@ -591,7 +591,7 @@ func (h *Handlers) ImportRecipe(w http.ResponseWriter, r *http.Request) {
 	project, err := h.service.ImportRecipe(r.Context(), raw)
 	if err != nil {
 		apps, _ := h.service.ListStoreApps(r.Context(), "", "")
-		h.page(w, r, "Recipes · oozie", "pages/recipes/import-content", map[string]any{"Error": err.Error(), "Recipe": raw, "Apps": apps})
+		h.page(w, r, "Recipes · Oozie Desk", "pages/recipes/import-content", map[string]any{"Error": err.Error(), "Recipe": raw, "Apps": apps})
 		return
 	}
 	http.Redirect(w, r, "/make/"+strconv.FormatInt(project.ID, 10), http.StatusSeeOther)
@@ -607,7 +607,7 @@ func (h *Handlers) RemixApp(w http.ResponseWriter, r *http.Request) {
 	remix, err := h.service.RemixApp(r.Context(), id, r.FormValue("mutation"))
 	if err != nil {
 		app, _ := h.service.GetStoreApp(r.Context(), id)
-		h.page(w, r, app.Name+" · oozie", "pages/store/show-content", map[string]any{"App": app, "Error": err.Error()})
+		h.page(w, r, app.Name+" · Oozie Desk", "pages/store/show-content", map[string]any{"App": app, "Error": err.Error()})
 		return
 	}
 	http.Redirect(w, r, "/make/"+strconv.FormatInt(remix.ID, 10), http.StatusSeeOther)
@@ -635,7 +635,7 @@ func (h *Handlers) InstalledApps(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) PublishingJobs(w http.ResponseWriter, r *http.Request) {
 	jobs, _ := h.service.ListJobs(r.Context(), r.URL.Query().Get("status"))
-	h.page(w, r, "Jobs · oozie", "pages/publishing/index-content", map[string]any{"Jobs": jobs, "Active": jobsActive(jobs)})
+	h.page(w, r, "Jobs · Oozie Desk", "pages/publishing/index-content", map[string]any{"Jobs": jobs, "Active": jobsActive(jobs)})
 }
 func (h *Handlers) PublishingJobsList(w http.ResponseWriter, r *http.Request) {
 	jobs, _ := h.service.ListJobs(r.Context(), r.URL.Query().Get("status"))
@@ -717,7 +717,7 @@ func (h *Handlers) Wishes(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) wishesPage(w http.ResponseWriter, r *http.Request, flash, errMsg string) {
 	wishes, _ := h.service.ListWishes(r.Context())
 	s, _ := h.service.GetSettings(r.Context())
-	h.renderer.HTML(w, 200, "layouts/base", render.ViewData{Title: "Wishes · oozie", Content: "pages/wishes/index-content", Flash: flash, Err: errMsg, Theme: s.Appearance, Style: s.StyleProfile, Data: map[string]any{"Wishes": wishes}})
+	h.renderer.HTML(w, 200, "layouts/base", render.ViewData{Title: "Wishes · Oozie Desk", Content: "pages/wishes/index-content", Flash: flash, Err: errMsg, Theme: s.Appearance, Style: s.StyleProfile, Data: map[string]any{"Wishes": wishes}})
 }
 func (h *Handlers) AddWish(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
@@ -754,7 +754,7 @@ func (h *Handlers) Settings(w http.ResponseWriter, r *http.Request) {
 	if s.CodingModel == "" {
 		s.CodingModel = model
 	}
-	h.page(w, r, "Settings · oozie", "pages/settings/index-content", map[string]any{
+	h.page(w, r, "Settings · Oozie Desk", "pages/settings/index-content", map[string]any{
 		"Settings": s, "Taste": h.service.LoadTaste(),
 		"Models": models, "Signed": signed, "Model": model,
 	})

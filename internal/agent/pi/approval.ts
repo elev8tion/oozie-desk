@@ -1,10 +1,10 @@
-// oozie approval gate — loaded via `pi -e` for untrusted projects only.
+// Oozie Desk approval gate — loaded via `pi -e` for untrusted projects only.
 //
 // pi's --approve/--no-approve flags control whether project-local config
 // files are trusted; they do NOT gate tool execution. This extension is
 // what makes an untrusted project actually safe: every mutating built-in
 // tool call (write, edit, bash) blocks on a confirm dialog, which reaches
-// oozie over RPC as an extension_ui_request and renders in the permission
+// Oozie Desk over RPC as an extension_ui_request and renders in the permission
 // panel. Deny blocks the tool; the model sees the refusal and continues.
 export default function (pi: any) {
 	const gated: Record<string, string> = {
@@ -27,7 +27,7 @@ export default function (pi: any) {
 			detail || "(no detail provided)",
 		);
 		if (!ok) {
-			return { block: true, reason: "The user denied this action in oozie's permission panel." };
+			return { block: true, reason: "The user denied this action in Oozie Desk's permission panel." };
 		}
 	});
 }

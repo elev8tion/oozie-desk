@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"oozie"
-	"oozie/internal/agent/pi"
-	"oozie/internal/web/render"
+	"oozie-desk"
+	"oozie-desk/internal/agent/pi"
+	"oozie-desk/internal/web/render"
 )
 
 func TestMakeRefusesUnsignedModelBeforeCreatingProject(t *testing.T) {

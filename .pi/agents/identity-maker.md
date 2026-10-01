@@ -1,6 +1,6 @@
 ---
 name: identity-maker
-description: Applies the locked Signal Desk visual identity across oozie-web templates and CSS. Does not change product behavior.
+description: Applies the locked Signal Desk visual identity across Oozie Desk templates and CSS. Does not change product behavior.
 model: xai/grok-4.3
 tools: read, grep, find, ls, bash, edit, write
 ---

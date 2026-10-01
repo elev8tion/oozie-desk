@@ -3,7 +3,7 @@ package projects
 import (
 	"time"
 
-	"oozie/internal/agent/pi"
+	"oozie-desk/internal/agent/pi"
 )
 
 type User struct {

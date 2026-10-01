@@ -1,6 +1,6 @@
 ---
 name: page-store
-description: Tests the store page of the oozie desk and reports PASS, FAIL, or BLOCKED. Use when that page needs an end-to-end check.
+description: Tests the store page of Oozie Desk and reports PASS, FAIL, or BLOCKED. Use when that page needs an end-to-end check.
 tools: read, bash
 model: xai/grok-4.3
 ---

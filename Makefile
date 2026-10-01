@@ -7,4 +7,4 @@ test:
 	go test ./...
 
 build:
-	go build -o dist/oozie-web ./cmd/app
+	go build -o dist/oozie-desk ./cmd/app

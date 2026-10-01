@@ -1,6 +1,6 @@
 ---
 name: oozie-fixer
-description: Implements the mapped oozie-web runtime and identity fixes. Does not redesign the product.
+description: Implements the mapped Oozie Desk runtime and identity fixes. Does not redesign the product.
 model: xai/grok-4.3
 tools: read, grep, find, ls, bash, edit, write
 ---

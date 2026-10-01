@@ -1,6 +1,6 @@
 ---
 name: oozie-reviewer
-description: Reviews oozie-web fixes against a written contract and rejects drift.
+description: Reviews Oozie Desk fixes against a written contract and rejects drift.
 model: xai/grok-4.3
 tools: read, grep, find, ls, bash
 ---

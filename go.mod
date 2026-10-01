@@ -1,4 +1,4 @@
-module oozie
+module oozie-desk
 
 go 1.24.0
 

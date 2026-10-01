@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"oozie/internal/agent/pi"
+	"oozie-desk/internal/agent/pi"
 )
 
 type memSink struct {

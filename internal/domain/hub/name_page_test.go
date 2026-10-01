@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"oozie"
-	"oozie/internal/web/render"
+	"oozie-desk"
+	"oozie-desk/internal/web/render"
 )
 
 func TestCreatedNameShowsOnSidebar(t *testing.T) {

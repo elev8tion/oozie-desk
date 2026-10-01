@@ -1,6 +1,6 @@
 # Page test guide
 
-You test one page of the oozie desk. You do not edit files. You do not commit. You do not touch port 8090 or `~/Library/Application Support/oozie-web`.
+You test one page of Oozie Desk. You do not edit files. You do not commit. You do not touch port 8090 or `~/Library/Application Support/Oozie-Desk`.
 
 Base URL: `http://127.0.0.1:8099`
 Fixture file: `/tmp/oozie-page-fixtures/ids.env`

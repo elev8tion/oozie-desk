@@ -1,6 +1,6 @@
-# oozie (web fork)
+# Oozie Desk
 
-A local desk for small personal tools. You describe a tool, the **in-repo coding agent** builds it with your LLM API key, and oozie opens it on localhost. A company is a circle of desks that pair by invitation. A share sends the recipe, never the data.
+A local desk for small personal tools. You describe a tool, the **in-repo coding agent** builds it with your LLM API key, and Oozie Desk opens it on localhost. A company is a circle of desks that pair by invitation. A share sends the recipe, never the data.
 
 This is a copy of the Mac factory. The original at `/Users/kc/oozie` is unchanged. This fork does not install anything into `/Applications`.
 
@@ -8,9 +8,9 @@ This is a copy of the Mac factory. The original at `/Users/kc/oozie` is unchange
 
 1. **Describe the tool** — one sentence on the desk. The project, directory, and trust flag are defaults.
 2. **Wait** — the agent builds one Go page that listens on `$ADDR`. No icon and no screenshot pass.
-3. **Open** — when the build finishes, oozie starts it and opens it at `/run/<id>` inside the desk chrome. A failed start is a failed job.
+3. **Open** — when the build finishes, Oozie Desk starts it and opens it at `/run/<id>` inside the desk chrome. A failed start is a failed job.
 4. **Back** — the run bar always has "Back to desk". New tools also footer-link `OOZIE_DESK_URL` so a bare localhost tab can return home.
-5. **Fix** — a second footer link returns to oozie with another sentence. Remix copies a working tool into a new one.
+5. **Fix** — a second footer link returns to Oozie Desk with another sentence. Remix copies a working tool into a new one.
 
 People is invitation-only. Connect stays off until you turn it on, and then it listens on a private address, not on the factory port. A share link does nothing until its owner turns it on. The other desk imports the recipe and builds the tool there — empty. Runtime records live under each tool's `data/` (`OOZIE_DATA_DIR`); remix and share never copy that folder or `*.db` files.
 
@@ -19,7 +19,7 @@ Projects, wishes, recipes, and the job list stay under More. They are not the wa
 ## Still in the loop
 
 - **Back to desk** — published apps receive `OOZIE_DESK_URL` and must link home to the factory desk from every page
-- **Fix** — published apps can link to `/improve/<slug>`; a request there becomes an agent build, then oozie republishes and restarts the app
+- **Fix** — published apps can link to `/improve/<slug>`; a request there becomes an agent build, then Oozie Desk republishes and restarts the app
 - **Launch pings** — an app may GET `/api/beacon/<slug>` so the store shows usage
 - **Remix** — fork a store app's source into a new project with a mutation prompt
 - **Recipes** — paste a Chrome Web Store, App Store, or Play Store link; review the drafted plan (Accept / Reject / Edit); export still downloads prompts plus design notes
@@ -34,10 +34,10 @@ Pixel surgery and the native Mac shell are not part of this fork.
 ```bash
 make run    # http://127.0.0.1:8090
 make test
-make build  # dist/oozie-web
+make build  # dist/oozie-desk
 ```
 
-Data lives in `~/Library/Application Support/oozie-web/app.db`.
+Data lives in `~/Library/Application Support/Oozie-Desk/app.db`. If you already have `~/Library/Application Support/oozie-web/`, that folder is still used.
 
 ## Requirements
 
@@ -47,7 +47,7 @@ Data lives in `~/Library/Application Support/oozie-web/app.db`.
 ## Environment variables
 
 - `ADDR` (default `127.0.0.1:8090`)
-- `DATABASE_PATH` (default `~/Library/Application Support/oozie-web/app.db`)
+- `DATABASE_PATH` (default `~/Library/Application Support/Oozie-Desk/app.db`)
 - `OPENROUTER_API_KEY` — preferred build key (also `XAI_API_KEY`, `ZAI_API_KEY`, `OPENAI_API_KEY`)
 - `OOZIE_AUTH_PATH` — optional override of `~/.pi/agent/auth.json` for keys/catalog compatibility
 - `OOZIE_OPEN_BROWSER=1` — open the UI on start

@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"oozie"
-	"oozie/internal/db"
-	"oozie/internal/web/render"
+	"oozie-desk"
+	"oozie-desk/internal/db"
+	"oozie-desk/internal/web/render"
 )
 
 // TestQAWebFactory is the live QA for this fork: pages, a real go build,

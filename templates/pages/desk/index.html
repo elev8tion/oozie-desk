@@ -3,7 +3,7 @@
 <section class="make">
   <p class="eyebrow">Your desk</p>
   <h1>What should this tool do?</h1>
-  <p class="muted">One sentence. oozie builds it on this machine and opens it. Sharing stays off until you turn a link on.</p>
+  <p class="muted">One sentence. Oozie Desk builds it on this machine and opens it. Sharing stays off until you turn a link on.</p>
   {{if $d.Err}}
   <p class="danger">{{$d.Err}}</p>
   {{if eq $d.Err "This model is not signed in."}}
@@ -24,7 +24,7 @@
 {{$insights := $d.Insights}}
 {{if $insights}}
 <section class="panel stack-sm">
-  <p class="eyebrow">oozie noticed</p>
+  <p class="eyebrow">Oozie Desk noticed</p>
   {{range $i := $insights}}<div class="mini-row"><span>{{$i.Text}}</span><a class="button small" href="{{$i.ActionURL}}">{{$i.ActionTxt}}</a></div>{{end}}
 </section>
 {{end}}

@@ -3,11 +3,11 @@ package native
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
-	"oozie/internal/agent/pi"
+	"oozie-desk/internal/agent/pi"
+	"oozie-desk/internal/supportpath"
 )
 
 // Keys holds API credentials the desk agent uses. Values never log.
@@ -201,14 +201,7 @@ func MergeCatalog(user pi.Catalog) pi.Catalog {
 
 // DataDir is where the desk may store agent-side files later.
 func DataDir() string {
-	if v := os.Getenv("OOZIE_DATA_ROOT"); v != "" {
-		return v
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library", "Application Support", "oozie-web")
+	return supportpath.Dir()
 }
 
 // keyCache avoids re-reading auth on every prompt in tests; LoadKeys is cheap enough.

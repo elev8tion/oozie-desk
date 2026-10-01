@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"oozie/internal/db"
+	"oozie-desk/internal/db"
 )
 
 type fakeBuilder struct {

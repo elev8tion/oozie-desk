@@ -128,8 +128,8 @@ func (c *ChatClient) complete(ctx context.Context, fullModel string, messages []
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+key)
 	if strings.Contains(base, "openrouter") {
-		req.Header.Set("HTTP-Referer", "https://oozie.local")
-		req.Header.Set("X-Title", "oozie-web")
+		req.Header.Set("HTTP-Referer", "https://oozie-desk.local")
+		req.Header.Set("X-Title", "Oozie Desk")
 	}
 	res, err := c.http().Do(req)
 	if err != nil {

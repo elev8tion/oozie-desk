@@ -44,12 +44,12 @@
     <label>Night shift starts at<select name="fairy_hour">
       {{range $h := ints 0 24}}<option value="{{$h}}"{{if eq $s.FairyHour $h}} selected{{end}}>{{printf "%02d:00" $h}}</option>{{end}}
     </select></label>
-    <p class="muted">Up to three wishes per night become trusted projects, built and started on this desk while you sleep. oozie must be running.</p>
+    <p class="muted">Up to three wishes per night become trusted projects, built and started on this desk while you sleep. Oozie Desk must be running.</p>
   </fieldset>
   <button class="button primary">Save settings</button>
 </form>
 <form class="panel form-stack stack-sm" hx-post="/settings/models/clear-dead" hx-target="#settings-panel">
-  <p class="muted">If a free model overloaded earlier, oozie may skip it until restart. Clear that memory without changing your preferred model.</p>
+  <p class="muted">If a free model overloaded earlier, Oozie Desk may skip it until restart. Clear that memory without changing your preferred model.</p>
   <button class="button">Clear automatic model skips</button>
 </form>
 {{end}}

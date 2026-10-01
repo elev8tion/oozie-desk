@@ -7,8 +7,8 @@ import (
 	"time"
 	"unicode"
 
-	"oozie/internal/agent/pi"
-	"oozie/internal/build"
+	"oozie-desk/internal/agent/pi"
+	"oozie-desk/internal/build"
 )
 
 // The wish inbox and its nightly build fairy: ideas dropped in during the

@@ -73,7 +73,7 @@ func NewManager(catalog Catalog, sink Sink) *Manager {
 	return m
 }
 
-// resolvePiBinary finds the pi executable even when oozie was launched
+// resolvePiBinary finds the pi executable even when Oozie Desk was launched
 // from Finder, where PATH is the bare system default and Homebrew paths
 // are missing.
 func resolvePiBinary() string {
@@ -118,7 +118,7 @@ func resolvePiBinary() string {
 // augmentedPathEnv returns the process environment with the common
 // Homebrew/local bin directories — plus any extra dirs, e.g. pi's own bin
 // dir so its sibling node binary resolves — appended to PATH, so pi's own
-// bash tool finds developer tooling under a Finder-launched oozie.
+// bash tool finds developer tooling under a Finder-launched Oozie Desk.
 func augmentedPathEnv(binDirs ...string) []string {
 	env := os.Environ()
 	extras := []string{"/opt/homebrew/bin", "/usr/local/bin"}

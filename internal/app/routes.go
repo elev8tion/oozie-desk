@@ -7,8 +7,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"oozie/internal/domain/hub"
-	"oozie/internal/domain/projects"
+	"oozie-desk/internal/domain/hub"
+	"oozie-desk/internal/domain/projects"
 )
 
 func (a *App) Routes() http.Handler {
@@ -133,7 +133,7 @@ func withDeskGuard(next http.Handler) http.Handler {
 				return
 			}
 			if _, err := r.Cookie("oozie_desk"); err != nil {
-				http.Error(w, "open oozie and try again", http.StatusForbidden)
+				http.Error(w, "open Oozie Desk and try again", http.StatusForbidden)
 				return
 			}
 		}

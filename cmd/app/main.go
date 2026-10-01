@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	"oozie"
-	"oozie/internal/app"
-	"oozie/internal/db"
-	"oozie/internal/web/render"
+	"oozie-desk"
+	"oozie-desk/internal/app"
+	"oozie-desk/internal/db"
+	"oozie-desk/internal/web/render"
 )
 
 func main() {
@@ -74,7 +74,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("oozie listening on http://%s (database: %s)", cfg.Addr, cfg.DatabasePath)
+		log.Printf("Oozie Desk listening on http://%s (database: %s)", cfg.Addr, cfg.DatabasePath)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server error: %v", err)
 		}

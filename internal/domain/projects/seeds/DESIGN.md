@@ -14,7 +14,7 @@ unless TASTE.md or the user overrides them.
 - Prefer the standard library. Add a dependency only when the app cannot
   work without it.
 - A footer always includes a link labeled "Back to desk" pointing at
-  `$OOZIE_DESK_URL` when that variable is set (the oozie home page). Use
+  `$OOZIE_DESK_URL` when that variable is set (the Oozie Desk home page). Use
   `target="_top"` so the link leaves an iframe shell if one is wrapping the
   tool. Every tool must let the user return to the desk without closing the tab.
 - A second footer link labeled "Improve this app" (or "Fix") points at

@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"oozie/internal/agent/pi"
+	"oozie-desk/internal/agent/pi"
 )
 
 const (
 	maxRounds       = 48
 	maxCutOffRounds = 2
 	idleTimeout     = 30 * time.Minute
-	defaultSystem   = "You are oozie's coding agent. Build one small Go web tool: one page, one main.go under 180 lines. No canvas, PDF engine, or second app. Write each file in one complete tool call. A cut-off write is a failure — write a smaller file instead. Prefer read/ls before write. Use bash for go build."
+	defaultSystem   = "You are Oozie Desk's coding agent. Build one small Go web tool: one page, one main.go under 180 lines. No canvas, PDF engine, or second app. Write each file in one complete tool call. A cut-off write is a failure — write a smaller file instead. Prefer read/ls before write. Use bash for go build."
 	cutOffReply     = "the model reply was cut off before the file was written"
 )
 

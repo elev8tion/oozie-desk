@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"oozie"
-	"oozie/internal/db"
-	"oozie/internal/domain/projects"
+	"oozie-desk"
+	"oozie-desk/internal/db"
+	"oozie-desk/internal/domain/projects"
 )
 
 func TestInviteShareAndRevoke(t *testing.T) {

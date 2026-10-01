@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"oozie/internal/web/render"
+	"oozie-desk/internal/web/render"
 )
 
 type Handlers struct {
@@ -32,7 +32,7 @@ func (h *Handlers) Desk(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "desk unavailable", http.StatusInternalServerError)
 		return
 	}
-	h.page(w, r, "oozie", "pages/desk/index-content", map[string]any{"Desk": desk})
+	h.page(w, r, "Oozie Desk", "pages/desk/index-content", map[string]any{"Desk": desk})
 }
 
 func (h *Handlers) People(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +48,7 @@ func (h *Handlers) renderPeople(w http.ResponseWriter, r *http.Request, invite, 
 	ident.Addr = h.service.Addr()
 	ident.Connect = ident.Addr != ""
 	peers, _ := h.service.Peers(r.Context())
-	h.page(w, r, "People · oozie", "pages/people/index-content", map[string]any{
+	h.page(w, r, "People · Oozie Desk", "pages/people/index-content", map[string]any{
 		"Identity": ident,
 		"Peers":    peers,
 		"Invite":   invite,

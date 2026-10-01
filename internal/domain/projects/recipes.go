@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"oozie/internal/agent/pi"
+	"oozie-desk/internal/agent/pi"
 )
 
 // A Recipe is an app shared as intent instead of a binary: the prompts
 // that grew it, its metadata, its design standard, and its icon. Another
-// oozie rebuilds it locally — adapted to that machine and that user.
+// Oozie Desk rebuilds it locally — adapted to that machine and that user.
 //
 // Isolation contract: a recipe never carries runtime usage data. Export
 // reads only agent prompts plus DESIGN.md and optional icon.png. It does

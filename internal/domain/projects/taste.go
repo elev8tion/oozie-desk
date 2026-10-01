@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"oozie-desk/internal/supportpath"
 )
 
 // TASTE.md is the user's evolving design voice — the genome every new app
@@ -23,7 +25,7 @@ before building anything. Write in plain language:
 
 ## Signals
 
-Raw evidence of your taste, appended automatically by oozie. Promote the
+Raw evidence of your taste, appended automatically by Oozie Desk. Promote the
 patterns you see into rules above, delete the noise.
 `
 
@@ -35,11 +37,11 @@ func tastePath() (string, error) {
 	if tasteDirOverride != "" {
 		return filepath.Join(tasteDirOverride, "TASTE.md"), nil
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
+	dir := supportpath.Dir()
+	if dir == "" {
+		return "", os.ErrNotExist
 	}
-	return filepath.Join(home, "Library", "Application Support", "oozie-web", "TASTE.md"), nil
+	return filepath.Join(dir, "TASTE.md"), nil
 }
 
 // LoadTaste returns the taste file, creating the default on first touch.

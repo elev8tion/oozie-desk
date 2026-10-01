@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"oozie/internal/agent/pi"
+	"oozie-desk/internal/agent/pi"
 )
 
 func TestBuildProgress(t *testing.T) {

@@ -3,7 +3,7 @@
 <section class="hero panel" style="padding:22px">
   <p class="eyebrow">Fix</p>
   <h1>{{$app.Name}}</h1>
-  <p class="muted">One sentence. oozie rebuilds the tool and opens the same URL.</p>
+  <p class="muted">One sentence. Oozie Desk rebuilds the tool and opens the same URL.</p>
   {{if index .Data "Error"}}<div class="notice error">{{index .Data "Error"}}</div>{{end}}
   <form method="post" action="/improve/{{$app.BundleSlug}}" class="form-stack">
     <label>What should be better?<textarea name="text" placeholder="The timer should flash red when it hits zero…" autofocus>{{index .Data "Text"}}</textarea></label>

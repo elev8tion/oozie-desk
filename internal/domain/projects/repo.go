@@ -392,7 +392,7 @@ func (r *Repo) CreateJob(ctx context.Context, projectID int64) (int64, error) {
 // SweepOrphanedJobs fails any job left queued/running by a previous
 // process: their goroutines died with it, so the rows can never settle.
 func (r *Repo) SweepOrphanedJobs(ctx context.Context) (int64, error) {
-	res, err := r.db.ExecContext(ctx, `UPDATE publishing_jobs SET status='failed', error_message='oozie quit while this build was running — publish again', updated_at=CURRENT_TIMESTAMP WHERE status IN ('queued','running')`)
+	res, err := r.db.ExecContext(ctx, `UPDATE publishing_jobs SET status='failed', error_message='Oozie Desk quit while this build was running — publish again', updated_at=CURRENT_TIMESTAMP WHERE status IN ('queued','running')`)
 	if err != nil {
 		return 0, err
 	}
@@ -777,7 +777,7 @@ func (r *Repo) SweepStaleAgentRequests(ctx context.Context) (int64, error) {
 
 // SweepStaleWishes fails wishes left 'building' by a dead process.
 func (r *Repo) SweepStaleWishes(ctx context.Context) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE wishes SET status='failed', error='oozie quit while this wish was building — set it back to pending or build it now' WHERE status='building'`)
+	_, err := r.db.ExecContext(ctx, `UPDATE wishes SET status='failed', error='Oozie Desk quit while this wish was building — set it back to pending or build it now' WHERE status='building'`)
 	return err
 }
 

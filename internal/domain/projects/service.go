@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"oozie/internal/agent/pi"
-	"oozie/internal/build"
+	"oozie-desk/internal/agent/pi"
+	"oozie-desk/internal/build"
 )
 
 // seedsFS is materialized into every project workdir: DESIGN.md (the
@@ -47,7 +47,7 @@ type Service struct {
 	catalog pi.Catalog
 	builder build.AppBuilder
 	jobs    sync.WaitGroup
-	baseURL string   // oozie's own address, used in improve links and beacon URLs
+	baseURL string   // Oozie Desk's own address, used in improve links and beacon URLs
 	procs   sync.Map // store app id -> *exec.Cmd for servers this process started
 
 	// Per-app mutexes guard Install/Uninstall/Open so two starts of same app
@@ -128,7 +128,7 @@ func (s *Service) lockProject(id int64) *sync.Mutex {
 	return m
 }
 
-// SetBaseURL records the address published apps use to reach oozie
+// SetBaseURL records the address published apps use to reach Oozie Desk
 // (improve links, optional launch pings).
 func (s *Service) SetBaseURL(u string) {
 	if u != "" {
@@ -142,7 +142,7 @@ func (s *Service) SetBuilder(b build.AppBuilder) { s.builder = b }
 // WaitForJobs blocks until all in-flight publishing jobs settle.
 func (s *Service) WaitForJobs() { s.jobs.Wait() }
 
-// StartBackground launches oozie's clocks: the TTL reaper that
+// StartBackground launches Oozie Desk's clocks: the TTL reaper that
 // self-destructs disposable apps. Loops exit when ctx is cancelled.
 func (s *Service) StartBackground(ctx context.Context) {
 	go s.reapLoop(ctx)
@@ -1154,16 +1154,16 @@ func newPiSessionID(projectID int64) string {
 }
 
 func oozieSystemPrompt(p Project, workdir, deskURL, improveURL, industryPack, taste string) string {
-	prompt := fmt.Sprintf(`You are running inside oozie, a local desk whose purpose is building small personal tools, as the agent for the project %q (working directory: %s).
+	prompt := fmt.Sprintf(`You are running inside Oozie Desk, a local desk whose purpose is building small personal tools, as the agent for the project %q (working directory: %s).
 
-How to behave in oozie:
+How to behave in Oozie Desk:
 - Requests arrive in one of two modes, stated at the top of each message.
 - PLAN mode: produce a concise, numbered implementation plan. Do not create, modify, or delete any files. End by asking whether to proceed.
 - BUILD mode: implement the request directly. The user's job comes first. A compiling stub is a failure.
 - Your responses are rendered in a compact web timeline; keep them focused and skip decorative preamble.
-- The user approves questions and permission dialogs through the oozie side panel; when you ask via a dialog, wait for that response. On front-door builds, do not ask — pick defaults.
+- The user approves questions and permission dialogs through the Oozie Desk side panel; when you ask via a dialog, wait for that response. On front-door builds, do not ask — pick defaults.
 
-Producing web apps (oozie's publish pipeline):
+Producing web apps (Oozie Desk's publish pipeline):
 - Scaffold a Go module at the project root: go.mod plus main.go. Prefer the standard library. Add a dependency only when the tool cannot work without it.
 - The server MUST listen on the ADDR environment variable (host:port). If ADDR is empty, listen on 127.0.0.1:$PORT. Do not hardcode a port.
 - GET / must return HTML with status 200 that does the user's job.
@@ -1192,9 +1192,9 @@ Producing web apps (oozie's publish pipeline):
 
 func wrapModeMessage(mode, message string) string {
 	if mode == "plan" {
-		return "[oozie mode: PLAN — plan only, do not modify files]\n\n" + message
+		return "[Oozie Desk mode: PLAN — plan only, do not modify files]\n\n" + message
 	}
-	return "[oozie mode: BUILD — implement directly]\n\n" + message
+	return "[Oozie Desk mode: BUILD — implement directly]\n\n" + message
 }
 func (s *Service) GetDraft(ctx context.Context, projectID int64) (PublishDraft, error) {
 	d, err := s.repo.GetDraft(ctx, projectID)

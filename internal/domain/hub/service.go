@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"oozie/internal/domain/projects"
+	"oozie-desk/internal/domain/projects"
 )
 
 const inviteTTL = 15 * time.Minute

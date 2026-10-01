@@ -1,4 +1,4 @@
-// Package oozie embeds the UI assets and migrations so the compiled
+// Package oozie (module oozie-desk) embeds the UI assets and migrations so the compiled
 // binary is fully self-contained and runs from anywhere.
 package oozie
 

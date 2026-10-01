@@ -16,7 +16,7 @@ CREATE TABLE app_events (
 CREATE INDEX idx_app_events_app ON app_events(store_app_id, created_at);
 
 -- Improvement requests filed from inside published apps (or the store).
--- When the linked agent request completes, oozie auto-republishes and,
+-- When the linked agent request completes, Oozie Desk auto-republishes and,
 -- if the app is installed, auto-reinstalls.
 CREATE TABLE improve_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

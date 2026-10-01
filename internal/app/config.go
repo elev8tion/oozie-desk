@@ -3,6 +3,8 @@ package app
 import (
 	"os"
 	"path/filepath"
+
+	"oozie-desk/internal/supportpath"
 )
 
 type Config struct {
@@ -20,11 +22,11 @@ func LoadConfig() Config {
 // defaultDatabasePath keeps the database in the standard macOS location so
 // the app works no matter where the binary lives.
 func defaultDatabasePath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	dir := supportpath.Dir()
+	if dir == "" {
 		return "data/app.db"
 	}
-	return filepath.Join(home, "Library", "Application Support", "oozie-web", "app.db")
+	return filepath.Join(dir, "app.db")
 }
 
 func env(key string, fallback string) string {

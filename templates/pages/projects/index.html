@@ -6,7 +6,7 @@
 {{$insights := index .Data "Insights"}}
 {{if $insights}}
 <section class="panel" style="margin-bottom:14px">
-  <p class="eyebrow">oozie noticed</p>
+  <p class="eyebrow">Oozie Desk noticed</p>
   {{range $i := $insights}}<div class="mini-row"><span>{{$i.Text}}</span><a class="button small" href="{{$i.ActionURL}}">{{$i.ActionTxt}}</a></div>{{end}}
 </section>
 {{end}}

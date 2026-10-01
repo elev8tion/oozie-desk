@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
-	"oozie/internal/agent/pi"
-	"oozie/internal/build"
+	"oozie-desk/internal/agent/pi"
+	"oozie-desk/internal/build"
 )
 
 // MakeView is what the front door shows while a sentence becomes a tool.

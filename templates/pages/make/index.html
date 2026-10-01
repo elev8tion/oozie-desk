@@ -1,8 +1,8 @@
 {{define "pages/make/index-content"}}
 <section class="make">
-  <p class="eyebrow">oozie</p>
+  <p class="eyebrow">Oozie Desk</p>
   <h1>What should this tool do?</h1>
-  <p class="muted">One sentence. oozie builds it on this machine and opens it.</p>
+  <p class="muted">One sentence. Oozie Desk builds it on this machine and opens it.</p>
   {{if .Err}}<p class="danger">{{.Err}}</p>{{end}}
   <form method="post" action="/make" class="form-stack">
     <label>Tool<textarea name="text" rows="4" required placeholder="A tool that tracks my sourdough feedings">{{index .Data "Text"}}</textarea></label>

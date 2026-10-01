@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// An Insight is oozie noticing something about your app ecosystem and
-// proposing what to do about it — derived only from data oozie already
+// An Insight is Oozie Desk noticing something about your app ecosystem and
+// proposing what to do about it — derived only from data Oozie Desk already
 // owns (beacon events, wishes, store state). No screen watching.
 type Insight struct {
 	Text      string

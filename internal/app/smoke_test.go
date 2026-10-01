@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"oozie"
-	"oozie/internal/db"
-	"oozie/internal/web/render"
+	"oozie-desk"
+	"oozie-desk/internal/db"
+	"oozie-desk/internal/web/render"
 )
 
 func newTestServer(t *testing.T) http.Handler {

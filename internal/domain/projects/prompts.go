@@ -90,7 +90,7 @@ Steps:
 - Put the result in the HTML the server returns, not only in a code comment.
 - In your final note, name the visible change in one sentence.
 - Keep the server listening on $ADDR and serving GET /. Verify with: go build -o /tmp/app .
-oozie republishes and restarts the tool when you finish.
+Oozie Desk republishes and restarts the tool when you finish.
 
 %s`, appName, strings.TrimSpace(text), scopeRestraint)
 }
@@ -137,7 +137,7 @@ func recipeBuildMessage(name, headline, description string, prompts []string) st
 	return b.String()
 }
 
-const recipePlanSystem = `You write build plans for oozie, a local desk that rebuilds store apps as small Go web tools.
+const recipePlanSystem = `You write build plans for Oozie Desk, a local desk that rebuilds store apps as small Go web tools.
 Read the store listing carefully. Produce a concrete plan the coding agent will follow.
 Rules:
 - One page only. One form and one list. main.go under 180 lines.

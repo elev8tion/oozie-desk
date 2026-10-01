@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"io/fs"
 
-	"oozie/internal/agent/native"
-	"oozie/internal/agent/pi"
-	"oozie/internal/domain/hub"
-	"oozie/internal/domain/projects"
-	"oozie/internal/web/render"
+	"oozie-desk/internal/agent/native"
+	"oozie-desk/internal/agent/pi"
+	"oozie-desk/internal/domain/hub"
+	"oozie-desk/internal/domain/projects"
+	"oozie-desk/internal/web/render"
 )
 
 type App struct {
