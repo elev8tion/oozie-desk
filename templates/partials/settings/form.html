@@ -23,7 +23,7 @@
       {{range $p, $ok := $signed}}{{if $ok}}<code>{{$p}}</code> {{end}}{{end}}
     </p>
     {{else}}
-    <p class="muted">No API keys found. Set <code>OPENROUTER_API_KEY</code> / <code>XAI_API_KEY</code> / <code>ZAI_API_KEY</code> or keep keys in <code>~/.pi/agent/auth.json</code>.</p>
+    <p class="muted">No API keys found. Add one below, or set <code>OPENROUTER_API_KEY</code> / <code>XAI_API_KEY</code> / <code>ZAI_API_KEY</code>.</p>
     {{end}}
   </fieldset>
   <fieldset><legend>Appearance</legend>
@@ -47,6 +47,18 @@
     <p class="muted">Up to three wishes per night become trusted projects, built and started on this desk while you sleep. Oozie Desk must be running.</p>
   </fieldset>
   <button class="button primary">Save settings</button>
+</form>
+<form class="panel form-stack stack-sm" method="post" action="/settings/key">
+  <p class="eyebrow">API key</p>
+  <label>Provider<select name="provider"><option value="openrouter">OpenRouter</option><option value="xai">xAI</option><option value="zai">Z.AI</option><option value="openai">OpenAI</option></select></label>
+  <label>API key<input type="password" name="key" autocomplete="off" required></label>
+  <button class="button" type="submit">Save key on this desk</button>
+  <p class="muted">Stored locally. It is not shown again.</p>
+</form>
+<form class="panel form-stack stack-sm" method="post" action="/settings/backup">
+  <p class="eyebrow">Desk backup</p>
+  <p class="muted">Download a copy of this desk's database. Tool records stay in each tool's data folder — use Download records on the tool.</p>
+  <button class="button" type="submit">Download desk backup</button>
 </form>
 <form class="panel form-stack stack-sm" hx-post="/settings/models/clear-dead" hx-target="#settings-panel">
   <p class="muted">If a free model overloaded earlier, Oozie Desk may skip it until restart. Clear that memory without changing your preferred model.</p>

@@ -8,7 +8,9 @@
     <span class="muted tool-run-url">{{$url}}</span>
     <div class="actions">
       {{if $app.BundleSlug}}<a class="button small" href="/improve/{{$app.BundleSlug}}">Fix</a>{{end}}
+      <a class="button small" href="/run/{{$app.ID}}">Restart</a>
       <a class="button small" href="{{$url}}" target="_blank" rel="noopener">Open alone</a>
+      <a class="button small" href="/store/apps/{{$app.ID}}/data">Download records</a>
     </div>
   </header>
   <iframe class="tool-run-frame" src="{{$url}}" title="{{$app.Name}}"></iframe>

@@ -34,7 +34,10 @@ func New(config Config, database *sql.DB, renderer *render.Renderer, static fs.F
 	service.UseCredentialGate(func() map[string]bool {
 		return native.SignedFromKeys(native.LoadKeys())
 	}, func(model string) error {
-		return agent.HasKeyFor(model)
+		return agent.ProbeModel(context.Background(), model)
+	})
+	service.UsePageProbe(func(workdir, request string) (bool, string, string) {
+		return projects.ProbeWorkdir(context.Background(), workdir, request)
 	})
 	service.SetBaseURL("http://" + config.Addr)
 	service.RecoverOrphanedJobs(context.Background())

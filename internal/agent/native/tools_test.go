@@ -49,6 +49,18 @@ func TestToolsRefuseEscape(t *testing.T) {
 	}
 }
 
+func TestBashStaysInTheProject(t *testing.T) {
+	dir := t.TempDir()
+	_, body, err := runTool(context.Background(), dir, "bash", `{"command":"cat /etc/passwd"}`)
+	if err == nil || !strings.Contains(body, "leaves the project") {
+		t.Fatalf("err=%v body=%q", err, body)
+	}
+	_, body, err = runTool(context.Background(), dir, "bash", `{"command":"echo ok"}`)
+	if err != nil || !strings.Contains(body, "ok") {
+		t.Fatalf("in-project bash failed: %v %s", err, body)
+	}
+}
+
 func TestResolveEndpointOpenRouter(t *testing.T) {
 	k := Keys{OpenRouter: "sk-test"}
 	base, key, model, err := k.ResolveEndpoint("openrouter/anthropic/claude-sonnet-4.6")

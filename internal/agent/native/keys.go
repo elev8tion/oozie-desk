@@ -2,7 +2,9 @@ package native
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -11,22 +13,64 @@ import (
 )
 
 // Keys holds API credentials the desk agent uses. Values never log.
+// Codex is the ChatGPT OAuth login from ~/.pi/agent/auth.json (openai-codex),
+// not an OpenAI platform API key.
 type Keys struct {
-	OpenRouter string
-	XAI        string
-	ZAI        string
-	OpenAI     string
+	OpenRouter       string
+	OpenRouterCustom string
+	OpenRouterBase   string
+	XAI              string
+	ZAI              string
+	OpenAI           string
+	CodexAccess      string
+	CodexAccount     string
+	CodexRefresh     string
+	CodexExpires     int64
+}
+
+// SaveProviderKey writes one provider key into the desk auth file.
+// The key is never logged. Env vars still override the file at read time.
+func SaveProviderKey(provider, key string) error {
+	provider = strings.TrimSpace(strings.ToLower(provider))
+	key = strings.TrimSpace(key)
+	switch provider {
+	case "openrouter", "xai", "zai", "openai":
+	default:
+		return fmt.Errorf("unknown provider")
+	}
+	if key == "" {
+		return fmt.Errorf("key is required")
+	}
+	path := pi.DefaultAuthPath()
+	if p := os.Getenv("OOZIE_AUTH_PATH"); p != "" {
+		path = p
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	raw := map[string]any{}
+	if body, err := os.ReadFile(path); err == nil && len(body) > 0 {
+		_ = json.Unmarshal(body, &raw)
+	}
+	raw[provider] = key
+	body, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, body, 0o600)
 }
 
 // LoadKeys reads env overrides first, then ~/.pi/agent/auth.json so existing
 // pi logins work without the pi binary.
 func LoadKeys() Keys {
 	k := Keys{
-		OpenRouter: strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")),
-		XAI:        firstEnv("XAI_API_KEY", "GROK_API_KEY"),
-		ZAI:        firstEnv("ZAI_API_KEY", "Z_AI_API_KEY"),
-		OpenAI:     strings.TrimSpace(os.Getenv("OPENAI_API_KEY")),
+		OpenRouter:     strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")),
+		OpenRouterBase: openRouterBase(),
+		XAI:            firstEnv("XAI_API_KEY", "GROK_API_KEY"),
+		ZAI:            firstEnv("ZAI_API_KEY", "Z_AI_API_KEY"),
+		OpenAI:         strings.TrimSpace(os.Getenv("OPENAI_API_KEY")),
 	}
+	k.OpenRouterCustom = k.OpenRouter
 	path := pi.DefaultAuthPath()
 	if p := os.Getenv("OOZIE_AUTH_PATH"); p != "" {
 		path = p
@@ -42,6 +86,8 @@ func LoadKeys() Keys {
 	if k.OpenRouter == "" {
 		k.OpenRouter = credString(raw["openrouter"])
 	}
+	k.OpenRouterCustom = firstNonEmpty(credString(raw["openrouter-custom"]), k.OpenRouter)
+	k.OpenRouterBase = openRouterBase()
 	if k.XAI == "" {
 		k.XAI = firstNonEmpty(credString(raw["xai"]), credField(raw["xai"], "access"), credField(raw["xai-auth"], "access"))
 	}
@@ -49,7 +95,21 @@ func LoadKeys() Keys {
 		k.ZAI = firstNonEmpty(credString(raw["zai"]), credField(raw["zai"], "key"))
 	}
 	if k.OpenAI == "" {
-		k.OpenAI = firstNonEmpty(credString(raw["openai"]), credField(raw["openai"], "key"), credString(raw["openai-codex"]))
+		k.OpenAI = firstNonEmpty(credString(raw["openai"]), credField(raw["openai"], "key"))
+	}
+	if cred := raw["openai-codex"]; len(cred) > 0 {
+		if k.CodexAccess == "" {
+			k.CodexAccess = firstNonEmpty(credField(cred, "access"), credString(cred))
+		}
+		if k.CodexAccount == "" {
+			k.CodexAccount = credField(cred, "accountId")
+		}
+		if k.CodexRefresh == "" {
+			k.CodexRefresh = credField(cred, "refresh")
+		}
+		if k.CodexExpires == 0 {
+			k.CodexExpires = credInt(cred, "expires")
+		}
 	}
 	return k
 }
@@ -83,6 +143,24 @@ func credString(raw json.RawMessage) string {
 	return firstNonEmpty(credField(raw, "key"), credField(raw, "apiKey"), credField(raw, "access"), credField(raw, "token"))
 }
 
+func credInt(raw json.RawMessage, field string) int64 {
+	if len(raw) == 0 {
+		return 0
+	}
+	var m map[string]any
+	if json.Unmarshal(raw, &m) != nil {
+		return 0
+	}
+	switch v := m[field].(type) {
+	case float64:
+		return int64(v)
+	case json.Number:
+		n, _ := v.Int64()
+		return n
+	}
+	return 0
+}
+
 func credField(raw json.RawMessage, field string) string {
 	if len(raw) == 0 {
 		return ""
@@ -101,6 +179,9 @@ func SignedFromKeys(k Keys) map[string]bool {
 	if k.OpenRouter != "" {
 		out["openrouter"] = true
 	}
+	if k.OpenRouterCustom != "" || k.OpenRouter != "" {
+		out["openrouter-custom"] = true
+	}
 	if k.XAI != "" {
 		out["xai"] = true
 	}
@@ -109,6 +190,8 @@ func SignedFromKeys(k Keys) map[string]bool {
 	}
 	if k.OpenAI != "" {
 		out["openai"] = true
+	}
+	if k.CodexAccess != "" {
 		out["openai-codex"] = true
 	}
 	return out
@@ -125,7 +208,13 @@ func (k Keys) ResolveEndpoint(full string) (baseURL, apiKey, modelID string, err
 		if k.OpenRouter == "" {
 			return "", "", "", errNoKey("openrouter")
 		}
-		return "https://openrouter.ai/api/v1", k.OpenRouter, opt.ID, nil
+		return openRouterURL(k.OpenRouterBase), k.OpenRouter, opt.ID, nil
+	case "openrouter-custom":
+		key := firstNonEmpty(k.OpenRouterCustom, k.OpenRouter)
+		if key == "" {
+			return "", "", "", errNoKey("openrouter")
+		}
+		return openRouterURL(k.OpenRouterBase), key, opt.ID, nil
 	case "xai":
 		if k.XAI == "" {
 			return "", "", "", errNoKey("xai")
@@ -137,11 +226,16 @@ func (k Keys) ResolveEndpoint(full string) (baseURL, apiKey, modelID string, err
 		}
 		// Z.AI OpenAI-compatible surface.
 		return "https://api.z.ai/api/paas/v4", k.ZAI, opt.ID, nil
-	case "openai", "openai-codex":
+	case "openai":
 		if k.OpenAI == "" {
 			return "", "", "", errNoKey("openai")
 		}
 		return "https://api.openai.com/v1", k.OpenAI, opt.ID, nil
+	case "openai-codex":
+		if k.CodexAccess == "" {
+			return "", "", "", errNoKey("openai-codex")
+		}
+		return codexBaseURL, k.CodexAccess, opt.ID, nil
 	default:
 		// Unknown provider: try OpenRouter with full id if we have a key.
 		if k.OpenRouter != "" {
@@ -189,14 +283,101 @@ func DefaultCatalog() pi.Catalog {
 }
 
 // MergeCatalog prefers user settings; fills empty with defaults.
+// Pi's openrouter-custom provider from models.json is always offered.
 func MergeCatalog(user pi.Catalog) pi.Catalog {
 	if len(user.Models) == 0 {
-		return DefaultCatalog()
+		user = DefaultCatalog()
 	}
 	if user.DefaultModel == "" {
 		user.DefaultModel = user.Models[0].Full
 	}
+	for _, extra := range openRouterModels() {
+		if !catalogHas(user, extra.Full) {
+			user.Models = append(user.Models, extra)
+		}
+	}
 	return user
+}
+
+func catalogHas(c pi.Catalog, full string) bool {
+	for _, m := range c.Models {
+		if m.Full == full {
+			return true
+		}
+	}
+	return false
+}
+
+func openRouterURL(base string) string {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	if base == "" {
+		return "https://openrouter.ai/api/v1"
+	}
+	return base
+}
+
+func piModelsPath() string {
+	if p := os.Getenv("OOZIE_AUTH_PATH"); p != "" {
+		return filepath.Join(filepath.Dir(p), "models.json")
+	}
+	return filepath.Join(filepath.Dir(pi.DefaultAuthPath()), "models.json")
+}
+
+func openRouterBase() string {
+	base, _ := readOpenRouterProvider()
+	return openRouterURL(base)
+}
+
+func openRouterModels() []pi.ModelOption {
+	_, models := readOpenRouterProvider()
+	return models
+}
+
+func openRouterReasons(full string) bool {
+	_, models := readOpenRouterProvider()
+	for _, m := range models {
+		if m.Full == full {
+			return m.ID != "" && openRouterReasoning[m.Full]
+		}
+	}
+	return openRouterReasoning[full]
+}
+
+var openRouterReasoning = map[string]bool{}
+
+func readOpenRouterProvider() (string, []pi.ModelOption) {
+	body, err := os.ReadFile(piModelsPath())
+	if err != nil {
+		return "", nil
+	}
+	var doc struct {
+		Providers map[string]struct {
+			BaseURL string `json:"baseUrl"`
+			Models  []struct {
+				ID        string `json:"id"`
+				Reasoning bool   `json:"reasoning"`
+			} `json:"models"`
+		} `json:"providers"`
+	}
+	if json.Unmarshal(body, &doc) != nil {
+		return "", nil
+	}
+	prov, ok := doc.Providers["openrouter-custom"]
+	if !ok {
+		return "", nil
+	}
+	var models []pi.ModelOption
+	for _, item := range prov.Models {
+		if strings.TrimSpace(item.ID) == "" {
+			continue
+		}
+		full := "openrouter-custom/" + item.ID
+		if opt, ok := splitFull(full); ok {
+			models = append(models, opt)
+			openRouterReasoning[full] = item.Reasoning
+		}
+	}
+	return prov.BaseURL, models
 }
 
 // DataDir is where the desk may store agent-side files later.

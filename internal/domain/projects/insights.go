@@ -45,6 +45,22 @@ func (s *Service) Insights(ctx context.Context) []Insight {
 			})
 		}
 	}
+	if failed, err := s.repo.FailedOutcomes(ctx); err == nil {
+		for _, row := range failed {
+			name := "A tool"
+			if p, err := s.repo.GetProject(ctx, row.ProjectID); err == nil && p.Name != "" {
+				name = p.Name
+			}
+			out = append(out, Insight{
+				Text:      fmt.Sprintf("%s did not pass the job check. %s", name, row.Reason),
+				ActionURL: "/projects/" + fmt.Sprint(row.ProjectID) + "/agent",
+				ActionTxt: "Open the build",
+			})
+			if len(out) >= 4 {
+				return out[:4]
+			}
+		}
+	}
 	if wishes, err := s.repo.PendingWishes(ctx, 10); err == nil && len(wishes) > 0 {
 		oldest := wishes[0]
 		if time.Since(oldest.CreatedAt) > 3*24*time.Hour {

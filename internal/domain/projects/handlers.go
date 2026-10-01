@@ -6,9 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
+	"oozie-desk/internal/agent/native"
 	"oozie-desk/internal/web/render"
 )
 
@@ -89,6 +92,33 @@ func (h *Handlers) RunApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.page(w, r, app.Name+" · Oozie Desk", "pages/run/show-content", map[string]any{"App": app, "URL": url})
+}
+
+func (h *Handlers) CancelMake(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	_ = h.service.CancelBuild(r.Context(), id)
+	http.Redirect(w, r, "/make/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+func (h *Handlers) CancelFix(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	st, err := h.service.ImproveStatus(r.Context(), id)
+	if err != nil {
+		h.errorPage(w, r, 404, "That fix is not running.")
+		return
+	}
+	if st.AppID != 0 {
+		if app, err := h.service.GetStoreApp(r.Context(), st.AppID); err == nil && app.ProjectID != nil {
+			_ = h.service.CancelBuild(r.Context(), *app.ProjectID)
+		}
+	}
+	http.Redirect(w, r, "/fix/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }
 
 func (h *Handlers) MakeStatus(w http.ResponseWriter, r *http.Request) {
@@ -510,6 +540,55 @@ func (h *Handlers) ProposeRecipeFromLink(w http.ResponseWriter, r *http.Request)
 }
 
 // RecipeDraftPage shows the natural-language plan with Accept / Reject / Edit.
+func (h *Handlers) ExportToolData(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	path, err := h.service.ExportToolData(r.Context(), id)
+	if err != nil {
+		h.errorPage(w, r, 422, err.Error())
+		return
+	}
+	defer os.Remove(path)
+	f, err := os.Open(path)
+	if err != nil {
+		h.errorPage(w, r, 500, "Couldn't read the export.")
+		return
+	}
+	defer f.Close()
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="tool-data.zip"`)
+	_, _ = io.Copy(w, f)
+}
+
+func (h *Handlers) SaveAPIKey(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	if err := native.SaveProviderKey(r.FormValue("provider"), r.FormValue("key")); err != nil {
+		http.Redirect(w, r, "/settings?err="+url.QueryEscape("Couldn't save the key."), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/settings?flash="+url.QueryEscape("Key saved on this desk."), http.StatusSeeOther)
+}
+
+func (h *Handlers) BackupDesk(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Join(os.TempDir(), "oozie-desk-backup.db")
+	if err := h.service.BackupDesk(r.Context(), path); err != nil {
+		h.errorPage(w, r, 500, "Couldn't back up the desk.")
+		return
+	}
+	defer os.Remove(path)
+	f, err := os.Open(path)
+	if err != nil {
+		h.errorPage(w, r, 500, "Couldn't read the backup.")
+		return
+	}
+	defer f.Close()
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="oozie-desk-backup.db"`)
+	_, _ = io.Copy(w, f)
+}
+
 func (h *Handlers) RecipeDraftPage(w http.ResponseWriter, r *http.Request) {
 	id, ok := h.pathID(w, r, "id")
 	if !ok {
@@ -528,6 +607,7 @@ func (h *Handlers) RecipeDraftPage(w http.ResponseWriter, r *http.Request) {
 		"Draft":      draft,
 		"SourceKind": sourceKindLabel(draft.SourceKind),
 		"Error":      r.URL.Query().Get("err"),
+		"Collapsed":  strings.Contains(draft.Plan, "Ignored a larger plan"),
 	})
 }
 
@@ -757,6 +837,7 @@ func (h *Handlers) Settings(w http.ResponseWriter, r *http.Request) {
 	h.page(w, r, "Settings · Oozie Desk", "pages/settings/index-content", map[string]any{
 		"Settings": s, "Taste": h.service.LoadTaste(),
 		"Models": models, "Signed": signed, "Model": model,
+		"Flash": r.URL.Query().Get("flash"), "Err": r.URL.Query().Get("err"),
 	})
 }
 

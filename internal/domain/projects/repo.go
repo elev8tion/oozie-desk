@@ -510,6 +510,16 @@ func (r *Repo) LatestJob(ctx context.Context, projectID int64) (PublishingJob, e
 }
 
 // LatestRequest is the newest agent request for a project, plus its last error line.
+func (r *Repo) LatestRequestID(ctx context.Context, projectID int64) (int64, string, error) {
+	var id int64
+	var status string
+	err := r.db.QueryRowContext(ctx, `SELECT r.id, r.status FROM agent_requests r JOIN agent_sessions s ON s.id = r.session_id WHERE s.project_id=? ORDER BY r.id DESC LIMIT 1`, projectID).Scan(&id, &status)
+	if err == sql.ErrNoRows {
+		return 0, "", nil
+	}
+	return id, status, err
+}
+
 func (r *Repo) LatestRequest(ctx context.Context, projectID int64) (status, errMsg string, err error) {
 	var requestID int64
 	err = r.db.QueryRowContext(ctx, `SELECT r.id, r.status FROM agent_requests r JOIN agent_sessions s ON s.id = r.session_id WHERE s.project_id=? ORDER BY r.id DESC LIMIT 1`, projectID).Scan(&requestID, &status)
@@ -811,6 +821,122 @@ func (r *Repo) SettleRecipeDraft(ctx context.Context, id int64, status string, p
 	}
 	_, err := r.db.ExecContext(ctx, `UPDATE recipe_drafts SET status=?, project_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
 		status, pid, id)
+	return err
+}
+
+func (r *Repo) SaveFrontDoor(ctx context.Context, requestID, projectID int64, kind string) error {
+	_, err := r.db.ExecContext(ctx, `INSERT INTO front_door (request_id, project_id, kind) VALUES (?,?,?) ON CONFLICT(request_id) DO UPDATE SET project_id=excluded.project_id, kind=excluded.kind`, requestID, projectID, kind)
+	return err
+}
+
+func (r *Repo) DeleteFrontDoor(ctx context.Context, requestID int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM front_door WHERE request_id=?`, requestID)
+	return err
+}
+
+func (r *Repo) DeleteFrontDoorProject(ctx context.Context, projectID int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM front_door WHERE project_id=?`, projectID)
+	return err
+}
+
+// FrontDoorRows are unsettled build links. status is the agent request status.
+func (r *Repo) FrontDoorRows(ctx context.Context) ([]struct {
+	RequestID int64
+	ProjectID int64
+	Kind      string
+	Status    string
+}, error) {
+	var out []struct {
+		RequestID int64
+		ProjectID int64
+		Kind      string
+		Status    string
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT f.request_id, f.project_id, f.kind, COALESCE(ar.status,'') FROM front_door f LEFT JOIN agent_requests ar ON ar.id=f.request_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var row struct {
+			RequestID int64
+			ProjectID int64
+			Kind      string
+			Status    string
+		}
+		if err := rows.Scan(&row.RequestID, &row.ProjectID, &row.Kind, &row.Status); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) SaveOutcome(ctx context.Context, projectID int64, ok bool, reason string) error {
+	n := 0
+	if ok {
+		n = 1
+	}
+	_, err := r.db.ExecContext(ctx, `INSERT INTO outcome_checks (project_id, ok, reason, checked_at) VALUES (?,?,?,datetime('now')) ON CONFLICT(project_id) DO UPDATE SET ok=excluded.ok, reason=excluded.reason, checked_at=datetime('now')`, projectID, n, reason)
+	return err
+}
+
+func (r *Repo) FailedOutcomes(ctx context.Context) ([]struct {
+	ProjectID int64
+	Reason    string
+}, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT project_id, reason FROM outcome_checks WHERE ok=0`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []struct {
+		ProjectID int64
+		Reason    string
+	}
+	for rows.Next() {
+		var row struct {
+			ProjectID int64
+			Reason    string
+		}
+		if err := rows.Scan(&row.ProjectID, &row.Reason); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// RecentTurns returns completed user/assistant turns before the current request, oldest first.
+func (r *Repo) RecentTurns(ctx context.Context, projectID int64, limit int) ([]struct{ Role, Content string }, error) {
+	if limit <= 0 {
+		limit = 8
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT m.role, m.content FROM agent_messages m JOIN agent_requests ar ON ar.id=m.request_id JOIN agent_sessions s ON s.id=ar.session_id WHERE s.project_id=? AND m.role IN ('user','assistant') AND m.status='completed' ORDER BY m.id DESC LIMIT ?`, projectID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var rev []struct{ Role, Content string }
+	for rows.Next() {
+		var row struct{ Role, Content string }
+		if err := rows.Scan(&row.Role, &row.Content); err != nil {
+			return nil, err
+		}
+		rev = append(rev, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(rev)-1; i < j; i, j = i+1, j-1 {
+		rev[i], rev[j] = rev[j], rev[i]
+	}
+	return rev, nil
+}
+
+func (r *Repo) BackupTo(ctx context.Context, path string) error {
+	path = strings.ReplaceAll(path, "'", "''")
+	_, err := r.db.ExecContext(ctx, `VACUUM INTO '`+path+`'`)
 	return err
 }
 

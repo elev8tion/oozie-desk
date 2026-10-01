@@ -16,10 +16,10 @@ const qualityBar = `Quality bar — a compiling page is not done:
 
 // scopeRestraint is a hard limit, not a suggestion. Every build path includes it.
 const scopeRestraint = `Scope — hard limit, not a suggestion:
-- One page. One job. One main.go under 180 lines.
+- One page. One job. A second .go file in the same package is allowed when one write would be cut off.
 - No drawing canvas, PDF engine, pen tools, notebook grid, or second app.
 - A store listing is not a clone order. Build the smallest local version of the core job: one form and one list.
-- Write each file in one complete tool call. If a write would be long, write a smaller file. A cut-off tool call is a failure.`
+- Write each file in one complete tool call. A cut-off tool call is a failure — split the file instead of stopping early.`
 
 const contractReminder = `Desk contract — do not skip:
 - go.mod and main.go at the project root. Listen on $ADDR, or 127.0.0.1:$PORT if ADDR is empty. Never hardcode a port.
@@ -140,7 +140,7 @@ func recipeBuildMessage(name, headline, description string, prompts []string) st
 const recipePlanSystem = `You write build plans for Oozie Desk, a local desk that rebuilds store apps as small Go web tools.
 Read the store listing carefully. Produce a concrete plan the coding agent will follow.
 Rules:
-- One page only. One form and one list. main.go under 180 lines.
+- One page only. One form and one list. Split into a second .go file if one write would be cut off.
 - Do not plan a drawing canvas, PDF engine, pen tools, notebook grid, or a second app.
 - If the listing text is store chrome (download, screenshots, ratings), do not invent features. Name the product and plan one text field plus a saved list.
 - Do not invent cloud accounts, store APIs, proprietary code, or binary ports.
@@ -166,7 +166,7 @@ func restrainPlan(name, plan string) string {
 		}
 		plan = fmt.Sprintf("Job: one local page for %s. One text field and a saved list. No canvas, no PDF engine, no pen, no second screen.\nScreens: one.\nFields: one text field and a save button.\nSaved: rows under data/.\nDone when: GET / shows the saved rows.\n\nIgnored a larger plan that asked for a suite.", label)
 	}
-	if !strings.Contains(plan, "under 180 lines") {
+	if !strings.Contains(plan, "One page") && !strings.Contains(plan, "one page") {
 		plan += "\n\n" + scopeRestraint
 	}
 	if len(plan) > 1600 {

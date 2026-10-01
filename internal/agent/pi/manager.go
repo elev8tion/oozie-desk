@@ -192,6 +192,12 @@ func materializeApprovalExtension() string {
 }
 
 // StartOptions describe how to launch pi for a project.
+// Turn is one prior user or assistant message for the next prompt.
+type Turn struct {
+	Role    string
+	Content string
+}
+
 type StartOptions struct {
 	ProjectID    int64
 	Workdir      string
@@ -199,6 +205,7 @@ type StartOptions struct {
 	PiSessionID  string
 	SystemPrompt string
 	Trusted      bool
+	History      []Turn
 }
 
 // Prompt ensures a pi process is running for the project and sends the

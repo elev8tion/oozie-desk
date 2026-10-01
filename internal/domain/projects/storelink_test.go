@@ -202,7 +202,7 @@ func TestThinStoreChromeDoesNotBecomeASuite(t *testing.T) {
 	if strings.Contains(plan, "See screenshots") {
 		t.Fatalf("plan echoed store chrome: %q", plan)
 	}
-	if !strings.Contains(plan, "under 180 lines") || !strings.Contains(plan, "Goodnotes") {
+	if !strings.Contains(plan, "one page") && !strings.Contains(plan, "One page") || !strings.Contains(plan, "Goodnotes") {
 		t.Fatalf("plan=%q", plan)
 	}
 }

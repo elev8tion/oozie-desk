@@ -23,6 +23,7 @@
 
 <div class="panel form-stack" style="margin-top:1rem">
   <p class="eyebrow">What will be built</p>
+  {{if index .Data "Collapsed"}}<div class="notice">This listing asked for a suite. The plan below is the one-page version. Edit it before Accept if that is not the job you want.</div>{{end}}
   <pre class="plan-preview" style="white-space:pre-wrap;font-family:inherit;margin:0 0 1rem 0">{{$d.Plan}}</pre>
   <div class="actions" style="flex-wrap:wrap;gap:0.5rem">
     <form method="post" action="/recipes/drafts/{{$d.ID}}/accept" style="display:inline">

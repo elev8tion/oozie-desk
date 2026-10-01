@@ -23,7 +23,7 @@
     <form hx-post="/store/apps/{{$app.ID}}/install" hx-target="#store-app-card"><button class="button primary">Start</button></form>
     {{end}}
     {{if $app.BundleSlug}}<a class="button" href="/improve/{{$app.BundleSlug}}">Request a fix</a>{{end}}
-    {{if $app.ProjectID}}<a class="button" href="/store/apps/{{$app.ID}}/recipe">Export recipe</a>{{end}}
+    {{if $app.ProjectID}}<a class="button" href="/store/apps/{{$app.ID}}/recipe">Export recipe</a><a class="button" href="/store/apps/{{$app.ID}}/data">Download records</a>{{end}}
     <form hx-post="/store/apps/{{$app.ID}}/remove" hx-target="#store-app-card" hx-confirm="Remove {{$app.Name}} from this desk? The running copy stops. The project is kept."><button class="button danger">Remove from desk</button></form>
   </div>
   <div id="store-app-card"></div>

@@ -61,8 +61,11 @@ func TestBuildPromptsIncludeScopeLimit(t *testing.T) {
 		remixMessage("Timer", "tea"),
 		recipeBuildMessage("Notes", "local notes", "a list", []string{"one page"}),
 	} {
-		if !strings.Contains(msg, "under 180 lines") {
+		if !strings.Contains(msg, "One page") && !strings.Contains(msg, "one page") {
 			t.Fatalf("missing scope restraint: %q", msg)
+		}
+		if !strings.Contains(msg, "second .go file") {
+			t.Fatalf("missing split allowance: %q", msg)
 		}
 	}
 }

@@ -106,6 +106,7 @@ func (s *Service) trackFrontDoor(requestID, projectID int64) {
 		return
 	}
 	s.makeByRequest.Store(requestID, projectID)
+	_ = s.repo.SaveFrontDoor(context.Background(), requestID, projectID, "make")
 }
 
 // SetupHint is a desk sentence when no signed-in model is ready. It does not
@@ -264,6 +265,7 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 			return
 		}
 		s.makeByRequest.Delete(requestID)
+		_ = s.repo.DeleteFrontDoor(ctx, requestID)
 		return
 	}
 	if status != "completed" {
@@ -276,6 +278,7 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 		return
 	}
 	s.makeByRequest.Delete(requestID)
+	_ = s.repo.DeleteFrontDoor(ctx, requestID)
 	s.makeCreditRetry.Delete(projectID)
 	s.incompleteScaffold.Delete(projectID)
 	if project, err := s.repo.GetProject(ctx, projectID); err == nil {
@@ -283,6 +286,14 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 			s.noteIncompleteStop(ctx, projectID)
 			return
 		}
+	}
+	if proceed, repairing := s.acceptPage(ctx, projectID, s.jobText(ctx, projectID, requestID), func(newID int64) {
+		s.trackFrontDoor(newID, projectID)
+	}); !proceed {
+		if repairing {
+			return
+		}
+		return
 	}
 	if err := s.Publish(ctx, projectID); err != nil {
 		// Publish records its own job failure when the build starts. If it

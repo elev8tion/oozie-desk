@@ -54,7 +54,8 @@ type chatRequest struct {
 	ToolChoice any           `json:"tool_choice,omitempty"`
 	// Cap completion size. Omitting this lets some providers (OpenRouter)
 	// assume a huge default and refuse low-credit accounts.
-	MaxTokens int `json:"max_tokens,omitempty"`
+	MaxTokens int            `json:"max_tokens,omitempty"`
+	Reasoning map[string]any `json:"reasoning,omitempty"`
 }
 
 type toolDef struct {
@@ -104,6 +105,9 @@ func (c *ChatClient) CompleteText(ctx context.Context, fullModel, system, user s
 }
 
 func (c *ChatClient) complete(ctx context.Context, fullModel string, messages []chatMessage, withTools bool, maxTokens int) (chatMessage, *piUsage, error) {
+	if strings.HasPrefix(fullModel, "openai-codex/") {
+		return c.completeCodex(ctx, fullModel, messages, withTools, maxTokens)
+	}
 	base, key, modelID, err := c.Keys.ResolveEndpoint(fullModel)
 	if err != nil {
 		return chatMessage{}, nil, err
@@ -116,6 +120,11 @@ func (c *ChatClient) complete(ctx context.Context, fullModel string, messages []
 	if withTools {
 		reqBody.Tools = codingTools()
 		reqBody.ToolChoice = "auto"
+	}
+	if strings.HasPrefix(fullModel, "openrouter-custom/") && openRouterReasons(fullModel) {
+		if effort := codexReasoningEffort(); effort != "" {
+			reqBody.Reasoning = map[string]any{"effort": effort}
+		}
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
@@ -130,6 +139,7 @@ func (c *ChatClient) complete(ctx context.Context, fullModel string, messages []
 	if strings.Contains(base, "openrouter") {
 		req.Header.Set("HTTP-Referer", "https://oozie-desk.local")
 		req.Header.Set("X-Title", "Oozie Desk")
+		req.Header.Set("User-Agent", "pi")
 	}
 	res, err := c.http().Do(req)
 	if err != nil {
@@ -187,7 +197,7 @@ func codingTools() []toolDef {
 		obj("read", "Read a UTF-8 text file under the project directory.",
 			map[string]any{"path": map[string]any{"type": "string", "description": "Relative or absolute path inside the project"}},
 			[]string{"path"}),
-		obj("write", "Create or overwrite one complete file under the project directory. Keep it under 180 lines so the call is not cut off.",
+		obj("write", "Create or overwrite one complete file under the project directory. If the file would be cut off, split it into a second .go file instead.",
 			map[string]any{
 				"path":    map[string]any{"type": "string"},
 				"content": map[string]any{"type": "string"},

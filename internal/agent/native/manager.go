@@ -15,7 +15,7 @@ const (
 	maxRounds       = 48
 	maxCutOffRounds = 2
 	idleTimeout     = 30 * time.Minute
-	defaultSystem   = "You are Oozie Desk's coding agent. Build one small Go web tool: one page, one main.go under 180 lines. No canvas, PDF engine, or second app. Write each file in one complete tool call. A cut-off write is a failure — write a smaller file instead. Prefer read/ls before write. Use bash for go build."
+	defaultSystem   = "You are Oozie Desk's coding agent. Build one small Go web tool: one page, one job. A second .go file in the same package is fine if one write would be cut off. No canvas, PDF engine, or second app. Write each file in one complete tool call. A cut-off write is a failure. Prefer read/ls before write. Use bash for go build."
 	cutOffReply     = "the model reply was cut off before the file was written"
 )
 
@@ -110,6 +110,26 @@ func (m *Manager) Prompt(opts pi.StartOptions, requestID int64, message string) 
 	return nil
 }
 
+func promptMessages(sys, userMsg string, history []pi.Turn) []chatMessage {
+	messages := []chatMessage{{Role: "system", Content: sys}}
+	for _, turn := range history {
+		role := turn.Role
+		if role != "user" && role != "assistant" {
+			continue
+		}
+		content := strings.TrimSpace(turn.Content)
+		if content == "" {
+			continue
+		}
+		if len(content) > 2000 {
+			content = content[:2000]
+		}
+		messages = append(messages, chatMessage{Role: role, Content: content})
+	}
+	messages = append(messages, chatMessage{Role: "user", Content: userMsg})
+	return messages
+}
+
 func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg string, gen uint64) {
 	m.mu.Lock()
 	s := m.sessions[projectID]
@@ -135,10 +155,7 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 	if sys == "" {
 		sys = defaultSystem
 	}
-	messages := []chatMessage{
-		{Role: "system", Content: sys},
-		{Role: "user", Content: userMsg},
-	}
+	messages := promptMessages(sys, userMsg, opts.History)
 
 	var lastErr error
 	cutOffs := 0
@@ -174,7 +191,7 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 					break
 				}
 				messages = append(messages, chatMessage{Role: "assistant", Content: msg.Content})
-				messages = append(messages, chatMessage{Role: "user", Content: "Your last reply was cut off. Write main.go in one complete call, under 180 lines. Do not send a partial file."})
+				messages = append(messages, chatMessage{Role: "user", Content: "Your last reply was cut off. Write the file in one complete call, or split it into a second .go file. Do not send a partial file."})
 				continue
 			}
 			text := strings.TrimSpace(msg.Content)
@@ -224,7 +241,7 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 				}
 			}
 			if broken || toolCallBroken(tc) {
-				body := "cut off: do not retry this call. Write a smaller main.go in one complete tool call, under 180 lines."
+				body := "cut off: do not retry this call. Write a complete smaller file, or split into a second .go file."
 				if m.sink != nil {
 					m.sink.ToolFinished(projectID, requestID, callID, name+" (cut off)", body)
 				}
@@ -262,7 +279,7 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 			break
 		}
 		if broken {
-			messages = append(messages, chatMessage{Role: "user", Content: "That tool call was cut off. Write main.go now, under 180 lines, in one complete write call."})
+			messages = append(messages, chatMessage{Role: "user", Content: "That tool call was cut off. Write the file now in one complete write call, or split it into a second .go file."})
 			continue
 		}
 		cutOffs = 0
@@ -464,6 +481,19 @@ func (m *Manager) Shutdown() {
 		}
 		delete(m.sessions, id)
 	}
+}
+
+// ProbeModel checks the key, then asks the provider for one token.
+// A refusal is returned so Make can stay on the desk instead of creating a project.
+func (m *Manager) ProbeModel(ctx context.Context, full string) error {
+	if err := m.HasKeyFor(full); err != nil {
+		return err
+	}
+	_, _, err := m.client.complete(ctx, full, []chatMessage{{Role: "user", Content: "ping"}}, false, 1)
+	if err != nil {
+		return fmt.Errorf("did not answer: %s", err.Error())
+	}
+	return nil
 }
 
 // HasKeyFor reports whether credentials exist for a full model id.

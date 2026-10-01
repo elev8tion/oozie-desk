@@ -87,6 +87,10 @@ type Service struct {
 	wishRetryN     sync.Map // wish id → hop count
 	// incompleteScaffold marks projects that already got one "finish main.go" nudge.
 	incompleteScaffold sync.Map
+	// outcomeRetried marks projects that already got one job-fit repair.
+	outcomeRetried sync.Map
+	// pageProbe checks GET / before publish. Nil skips the gate (tests).
+	pageProbe func(workdir, request string) (ok bool, reason, snippet string)
 
 	// signedIn is a test hook. Nil reads the pi auth file.
 	signedIn func() map[string]bool
@@ -203,6 +207,7 @@ func (s *Service) RecoverOrphanedJobs(ctx context.Context) {
 	if err := s.repo.SweepStalePrompts(ctx); err != nil {
 		log.Printf("sweep stale prompts: %v", err)
 	}
+	s.restoreFrontDoor(ctx)
 }
 
 // SetAgent wires the coding agent after construction (the manager's
@@ -668,6 +673,11 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 		return 0, ErrValidation{"Project directory unavailable: " + err.Error()}
 	}
 	s.materializeTaste(workdir)
+	history, _ := s.repo.RecentTurns(ctx, projectID, 8)
+	var turns []pi.Turn
+	for _, row := range history {
+		turns = append(turns, pi.Turn{Role: row.Role, Content: row.Content})
+	}
 	requestID, err := s.repo.CreateAgentRequest(ctx, session.ID, mode, message)
 	if err != nil {
 		return 0, err
@@ -679,6 +689,7 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 		PiSessionID:  session.PiSessionID,
 		SystemPrompt: oozieSystemPrompt(project, workdir, s.baseURL, s.improveURL(ctx, project), s.repo.IndustryPack(ctx), s.LoadTaste()),
 		Trusted:      project.Trusted,
+		History:      turns,
 	}
 	if err := s.agent.Prompt(opts, requestID, wrapModeMessage(mode, message)); err != nil {
 		_ = s.repo.InsertMessage(ctx, requestID, "system", "error", "Failed to start agent: "+err.Error())
@@ -838,6 +849,15 @@ func (s *Service) settleImprovement(projectID, requestID int64, status string) {
 	s.improveOrigin.Delete(requestID)
 	s.improveCurrent.Delete(originID)
 	s.improveRetryN.Delete(originID)
+	if proceed, repairing := s.acceptPage(ctx, projectID, imp.Note, func(newID int64) {
+		s.improveOrigin.Store(newID, originID)
+		s.improveCurrent.Store(originID, newID)
+	}); !proceed {
+		if !repairing {
+			_ = s.repo.SetImproveStatus(ctx, imp.ID, "failed")
+		}
+		return
+	}
 	_ = s.repo.SetImproveStatus(ctx, imp.ID, "publishing")
 	appID := imp.StoreAppID
 	// Load draft before publish: if AutoInstall (default), the publish job itself

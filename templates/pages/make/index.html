@@ -41,6 +41,7 @@
     </div>
     {{else}}
     <p>{{if $st.Line}}{{$st.Line}}{{else}}Starting.{{end}}</p>
+    <form method="post" action="/make/{{$st.ProjectID}}/cancel"><button class="button small" type="submit">Cancel</button></form>
     {{end}}
   {{end}}
 </div>

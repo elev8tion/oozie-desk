@@ -71,16 +71,39 @@ func resolveInWorkdir(workdir, path string) (string, error) {
 	return full, nil
 }
 
+func bashEscapes(workdir, command string) error {
+	workdir, err := filepath.Abs(workdir)
+	if err != nil {
+		return err
+	}
+	if strings.Contains(command, "~") || strings.Contains(command, "../") || strings.Contains(command, "..\\") {
+		return fmt.Errorf("command leaves the project directory")
+	}
+	for _, field := range strings.Fields(command) {
+		if !filepath.IsAbs(field) {
+			continue
+		}
+		rel, err := filepath.Rel(workdir, filepath.Clean(field))
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return fmt.Errorf("command leaves the project directory")
+		}
+	}
+	return nil
+}
+
 func toolBash(ctx context.Context, workdir, command string) (string, string, error) {
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return "bash (error)", "empty command", fmt.Errorf("empty command")
 	}
+	if err := bashEscapes(workdir, command); err != nil {
+		return "bash (error)", err.Error(), err
+	}
 	cctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, "/bin/zsh", "-lc", command)
 	cmd.Dir = workdir
-	cmd.Env = append(os.Environ(), "HOME="+os.Getenv("HOME"))
+	cmd.Env = append(os.Environ(), "HOME="+workdir)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

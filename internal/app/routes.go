@@ -39,6 +39,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /shares/accept", desk.AcceptLink)
 	mux.HandleFunc("POST /make", h.Make)
 	mux.HandleFunc("GET /make/{id}", h.MakeWait)
+	mux.HandleFunc("POST /make/{id}/cancel", h.CancelMake)
 	mux.HandleFunc("GET /fragments/make/{id}", h.MakeStatus)
 	mux.HandleFunc("GET /onboarding", h.Onboarding)
 
@@ -68,6 +69,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /improve/{slug}", h.ImprovePage)
 	mux.HandleFunc("POST /improve/{slug}", h.ImproveSubmit)
 	mux.HandleFunc("GET /fix/{id}", h.ImproveWait)
+	mux.HandleFunc("POST /fix/{id}/cancel", h.CancelFix)
 	mux.HandleFunc("GET /fragments/fix/{id}", h.ImproveStatus)
 
 	mux.HandleFunc("GET /store", h.Store)
@@ -79,6 +81,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /store/apps/{id}/remove", h.RemoveStoreApp)
 	mux.HandleFunc("POST /store/apps/{id}/remix", h.RemixApp)
 	mux.HandleFunc("GET /store/apps/{id}/recipe", h.ExportRecipe)
+	mux.HandleFunc("GET /store/apps/{id}/data", h.ExportToolData)
 	mux.HandleFunc("GET /recipes", h.ImportRecipePage)
 	mux.HandleFunc("GET /recipes/import", h.ImportRecipePage)
 	mux.HandleFunc("POST /recipes/from-link", h.ProposeRecipeFromLink)
@@ -106,6 +109,8 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /settings/model", h.SaveCodingModel)
 	mux.HandleFunc("POST /settings/models/clear-dead", h.ClearDeadModels)
 	mux.HandleFunc("POST /settings/taste", h.SaveTaste)
+	mux.HandleFunc("POST /settings/key", h.SaveAPIKey)
+	mux.HandleFunc("POST /settings/backup", h.BackupDesk)
 	mux.HandleFunc("/", h.NotFound)
 
 	return withRecovery(withLogging(withDeskGuard(mux)))

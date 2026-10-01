@@ -32,6 +32,7 @@
     <p><a class="button" href="{{$st.RetryURL}}">Try another sentence</a></p>
   {{else}}
     <p>{{if $st.Line}}{{$st.Line}}{{else}}Starting the fix.{{end}}</p>
+    <form method="post" action="/fix/{{$st.RequestID}}/cancel"><button class="button small" type="submit">Cancel</button></form>
   {{end}}
 </div>
 {{end}}
