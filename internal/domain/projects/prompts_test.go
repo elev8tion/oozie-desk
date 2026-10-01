@@ -42,6 +42,31 @@ func TestTasteRulesSkipPlaceholder(t *testing.T) {
 	}
 }
 
+func TestRestrainPlanDropsASuite(t *testing.T) {
+	plan := restrainPlan("Goodnotes", "Job: notebook grid, drawing canvas, PDF import, and pen tools.")
+	if !strings.Contains(plan, "Ignored a larger plan") {
+		t.Fatalf("suite plan was not replaced: %q", plan)
+	}
+	if !strings.Contains(plan, "Goodnotes") || !strings.Contains(plan, "one local page") {
+		t.Fatalf("plan=%q", plan)
+	}
+}
+
+func TestBuildPromptsIncludeScopeLimit(t *testing.T) {
+	for _, msg := range []string{
+		pageBuildMessage("a list"),
+		wishBuildMessage("plants"),
+		incompleteScaffoldNudge("books"),
+		improvementMessage("Timer", "pause"),
+		remixMessage("Timer", "tea"),
+		recipeBuildMessage("Notes", "local notes", "a list", []string{"one page"}),
+	} {
+		if !strings.Contains(msg, "under 180 lines") {
+			t.Fatalf("missing scope restraint: %q", msg)
+		}
+	}
+}
+
 func TestImprovementAndRemixNameTheVisibleChange(t *testing.T) {
 	fix := improvementMessage("Timer", "add a pause button")
 	if !strings.Contains(fix, "pause button") || !strings.Contains(fix, "visible on GET /") {

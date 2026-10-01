@@ -14,6 +14,13 @@ const qualityBar = `Quality bar — a compiling page is not done:
 - Visual: one background, one surface, one text color, one muted color, one accent. System font. 8px spacing. Support light and dark with prefers-color-scheme. No default unstyled blue-link page.
 - If the user can enter anything, a form must save it under data/ (or $OOZIE_DATA_DIR) and GET / must show the saved rows back.`
 
+// scopeRestraint is a hard limit, not a suggestion. Every build path includes it.
+const scopeRestraint = `Scope — hard limit, not a suggestion:
+- One page. One job. One main.go under 180 lines.
+- No drawing canvas, PDF engine, pen tools, notebook grid, or second app.
+- A store listing is not a clone order. Build the smallest local version of the core job: one form and one list.
+- Write each file in one complete tool call. If a write would be long, write a smaller file. A cut-off tool call is a failure.`
+
 const contractReminder = `Desk contract — do not skip:
 - go.mod and main.go at the project root. Listen on $ADDR, or 127.0.0.1:$PORT if ADDR is empty. Never hardcode a port.
 - GET / returns HTML 200.
@@ -40,7 +47,9 @@ Request:
 
 %s
 
-%s`, strings.TrimSpace(text), qualityBar, contractReminder)
+%s
+
+%s`, strings.TrimSpace(text), qualityBar, scopeRestraint, contractReminder)
 }
 
 // wishBuildMessage expands a vague wish into the same spec before coding.
@@ -55,9 +64,9 @@ This started as a wish, which is often vague. Turn it into the 5-line spec befor
 func incompleteScaffoldNudge(original string) string {
 	msg := `You stopped before the tool was usable. go.mod alone, or a page that does not do the job, is not done.
 
-Finish the original request now. The HTML must show that job — not a hello page, not only footer links.
+Finish the original request now, on this same model. Do not wait for another model. The HTML must show that job — not a hello page, not only footer links.
 
-` + qualityBar + "\n\n" + contractReminder
+` + qualityBar + "\n\n" + scopeRestraint + "\n\n" + contractReminder
 	original = strings.TrimSpace(original)
 	if original != "" {
 		msg += "\n\nOriginal request (implement this, do not ignore it):\n" + original
@@ -81,7 +90,9 @@ Steps:
 - Put the result in the HTML the server returns, not only in a code comment.
 - In your final note, name the visible change in one sentence.
 - Keep the server listening on $ADDR and serving GET /. Verify with: go build -o /tmp/app .
-oozie republishes and restarts the tool when you finish.`, appName, strings.TrimSpace(text))
+oozie republishes and restarts the tool when you finish.
+
+%s`, appName, strings.TrimSpace(text), scopeRestraint)
 }
 
 // remixMessage requires the mutation to show up in the copied app.
@@ -98,7 +109,9 @@ Before editing:
 - Apply the mutation in the UI and in behavior. Delete what no longer serves it.
 - Rename the module path, page title, and user-visible names to fit the new tool.
 - Keep durable records under data/ only. Keep listening on $ADDR.
-- Verify with: go build -o /tmp/remix .`, appName, strings.TrimSpace(mutation))
+- Verify with: go build -o /tmp/remix .
+
+%s`, appName, strings.TrimSpace(mutation), scopeRestraint)
 }
 
 // recipeBuildMessage leads with the recipe prompts as the spec.
@@ -113,10 +126,12 @@ func recipeBuildMessage(name, headline, description string, prompts []string) st
 	}
 	b.WriteString("\n\nPrompts that shaped it, in order (later prompts refine earlier ones — do not replay a conflict literally):\n")
 	for i, p := range prompts {
-		fmt.Fprintf(&b, "\n%d. %s\n", i+1, p)
+		fmt.Fprintf(&b, "\n%d. %s\n", i+1, restrainPlan(name, p))
 	}
 	b.WriteString("\n\n")
 	b.WriteString(qualityBar)
+	b.WriteString("\n\n")
+	b.WriteString(scopeRestraint)
 	b.WriteString("\n\nData isolation: fresh desk, empty storage. Durable records only under data/. Do not invent the original author's personal rows.\n\n")
 	b.WriteString(contractReminder)
 	return b.String()
@@ -125,9 +140,11 @@ func recipeBuildMessage(name, headline, description string, prompts []string) st
 const recipePlanSystem = `You write build plans for oozie, a local desk that rebuilds store apps as small Go web tools.
 Read the store listing carefully. Produce a concrete plan the coding agent will follow.
 Rules:
-- Cover the same user job as the listing, simplified for one local tool.
+- One page only. One form and one list. main.go under 180 lines.
+- Do not plan a drawing canvas, PDF engine, pen tools, notebook grid, or a second app.
+- If the listing text is store chrome (download, screenshots, ratings), do not invent features. Name the product and plan one text field plus a saved list.
 - Do not invent cloud accounts, store APIs, proprietary code, or binary ports.
-- Be specific about screens, fields, and flows from the listing — not generic filler.
+- Be specific about the one screen and its fields — not generic filler.
 - Plain text only. No markdown code fences.
 
 Output exactly these labels, then a short flow:
@@ -137,6 +154,40 @@ Fields:
 Saved:
 Done when:
 Flow:`
+
+// restrainPlan is the code gate behind the prompt. A plan that asks for a
+// suite is replaced with one page before any agent sees it.
+func restrainPlan(name, plan string) string {
+	plan = strings.TrimSpace(plan)
+	if asksForSuite(plan) {
+		label := strings.TrimSpace(name)
+		if label == "" {
+			label = "this tool"
+		}
+		plan = fmt.Sprintf("Job: one local page for %s. One text field and a saved list. No canvas, no PDF engine, no pen, no second screen.\nScreens: one.\nFields: one text field and a save button.\nSaved: rows under data/.\nDone when: GET / shows the saved rows.\n\nIgnored a larger plan that asked for a suite.", label)
+	}
+	if !strings.Contains(plan, "under 180 lines") {
+		plan += "\n\n" + scopeRestraint
+	}
+	if len(plan) > 1600 {
+		plan = strings.TrimSpace(plan[:1600]) + "\n\n" + scopeRestraint
+	}
+	return strings.TrimSpace(plan)
+}
+
+func asksForSuite(plan string) bool {
+	low := strings.ToLower(plan)
+	if strings.Contains(low, "drawing canvas") || strings.Contains(low, "pdf import") || strings.Contains(low, "pdf engine") || strings.Contains(low, "pen tool") {
+		return true
+	}
+	hits := 0
+	for _, w := range []string{"canvas", "pdf", "annotation", "notebook grid", "drawing"} {
+		if strings.Contains(low, w) {
+			hits++
+		}
+	}
+	return hits >= 2
+}
 
 // tasteRules pulls user rules out of TASTE.md so a skipped file read cannot drop them.
 // Placeholder bullets and the Signals log are omitted. Empty means no personal rules yet.

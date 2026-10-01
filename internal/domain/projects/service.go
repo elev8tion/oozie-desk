@@ -241,7 +241,7 @@ func (s *Service) CreateProject(ctx context.Context, name, path string, trusted 
 	}
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
-	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+	slug := folderSlug(name)
 	if path == "" {
 		ps, _ := s.repo.ListProjects(ctx, "", "")
 		var err error
@@ -259,6 +259,19 @@ func (s *Service) CreateProject(ctx context.Context, name, path string, trusted 
 		}
 	}
 	return s.repo.CreateProject(ctx, name, path, trusted)
+}
+
+// folderSlug is a filesystem-safe directory name. Colons, commas, and
+// other punctuation never land in the path.
+func folderSlug(name string) string {
+	s := strings.Trim(build.Slug(name), "-")
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	if s == "" || s == "app" {
+		return "tool"
+	}
+	return s
 }
 
 // nextAutomaticPath skips folders already used by a project or already
@@ -431,6 +444,40 @@ func (s *Service) modelForNewBuildCtx(ctx context.Context, sessionModel string) 
 		return "", ErrValidation{"No model answered."}
 	}
 	return "", ErrValidation{"This model is not signed in."}
+}
+
+// modelForRetry picks the next signed-in model after a real provider refusal.
+// It never returns exclude. Same model is not a hop.
+func (s *Service) modelForRetry(ctx context.Context, exclude string) (string, error) {
+	exclude = strings.TrimSpace(exclude)
+	if exclude != "" {
+		if s.deadModels == nil {
+			s.deadModels = map[string]bool{}
+		}
+		s.deadModels[exclude] = true
+	}
+	model, err := s.modelForNewBuildCtx(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	if !realHop(exclude, model) {
+		return "", ErrValidation{"No other signed-in model is available."}
+	}
+	return model, nil
+}
+
+// realHop is true only when the next model is a different signed-in model.
+func realHop(failed, next string) bool {
+	failed, next = strings.TrimSpace(failed), strings.TrimSpace(next)
+	return next != "" && next != failed
+}
+
+func (s *Service) pinSessionModel(ctx context.Context, projectID int64, model string) error {
+	session, err := s.repo.GetSession(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	return s.repo.SetSessionModel(ctx, session.ID, model)
 }
 func (s *Service) ArchiveProject(ctx context.Context, id int64) error {
 	return s.repo.ArchiveProject(ctx, id)
@@ -836,8 +883,17 @@ func (s *Service) retryImproveAfterModel(ctx context.Context, projectID, originI
 	if err != nil || !pi.ModelRejected(errMsg) {
 		return false
 	}
-	if session, err := s.repo.GetSession(ctx, projectID); err == nil && session.ID != 0 {
-		_ = s.repo.SetSessionModel(ctx, session.ID, "")
+	session, serr := s.repo.GetSession(ctx, projectID)
+	if serr != nil {
+		return false
+	}
+	next, nerr := s.modelForRetry(ctx, session.Model)
+	if nerr != nil || !realHop(session.Model, next) {
+		log.Printf("improve origin %d: refusal on %s — no other model, not hopping", originID, session.Model)
+		return false
+	}
+	if err := s.pinSessionModel(ctx, projectID, next); err != nil {
+		return false
 	}
 	msg, err := s.repo.FirstUserMessage(ctx, failedID)
 	if err != nil || strings.TrimSpace(msg) == "" {
@@ -852,7 +908,7 @@ func (s *Service) retryImproveAfterModel(ctx context.Context, projectID, originI
 	s.improveOrigin.Store(newID, originID)
 	s.improveCurrent.Store(originID, newID)
 	s.improveOrigin.Delete(failedID)
-	log.Printf("improve origin %d: model refusal on request %d — retrying as request %d (attempt %d)", originID, failedID, newID, n+1)
+	log.Printf("improve origin %d: refusal on %s request %d — switched to %s as request %d (attempt %d)", originID, session.Model, failedID, next, newID, n+1)
 	return true
 }
 
@@ -1051,7 +1107,7 @@ func projectWorkdir(p Project) (string, error) {
 func resolveWorkdir(p Project) (string, error) {
 	path := strings.TrimSpace(p.ProjectPathDisplay)
 	if path == "" {
-		path = "~/Projects/" + strings.ToLower(strings.ReplaceAll(p.Name, " ", "-"))
+		path = "~/Projects/" + folderSlug(p.Name)
 	}
 	if path == "~" || strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
@@ -1120,7 +1176,9 @@ Producing web apps (oozie's publish pipeline):
 %s
 
 %s
-`, p.Name, workdir, deskURL, improveURL, qualityBar, uiSkeleton)
+
+%s
+`, p.Name, workdir, deskURL, improveURL, qualityBar, scopeRestraint, uiSkeleton)
 	if rules := tasteRules(taste); rules != "" {
 		prompt += "\nUser taste — these override the generic design:\n" + rules + "\n"
 	} else {

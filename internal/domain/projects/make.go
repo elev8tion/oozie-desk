@@ -278,6 +278,12 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 	s.makeByRequest.Delete(requestID)
 	s.makeCreditRetry.Delete(projectID)
 	s.incompleteScaffold.Delete(projectID)
+	if project, err := s.repo.GetProject(ctx, projectID); err == nil {
+		if wd, werr := resolveWorkdir(project); werr == nil && !build.Buildable(wd) {
+			s.noteIncompleteStop(ctx, projectID)
+			return
+		}
+	}
 	if err := s.Publish(ctx, projectID); err != nil {
 		// Publish records its own job failure when the build starts. If it
 		// cannot even start, the waiting screen still needs one sentence.
@@ -287,11 +293,19 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 	}
 }
 
-// retryIncompleteScaffold re-prompts when the agent "completed" without a
-// compileable Go app (common on thin free models that only write go.mod).
-// First: same-model nudge that repeats the original job. Then: mark that
-// model dead and hop with the original build prompt. onRetry registers the
-// new agent request.
+// noteIncompleteStop records a visible failure when the agent finished
+// without Go source. This is not a model refusal, so the desk does not hop.
+func (s *Service) noteIncompleteStop(ctx context.Context, projectID int64) {
+	msg := "The model stopped before the tool had a Go source file. The desk did not switch models."
+	if jobID, err := s.repo.CreateJob(ctx, projectID); err == nil {
+		_ = s.repo.FinishJob(ctx, jobID, "failed", msg, nil)
+	}
+	log.Printf("project %d: incomplete scaffold — stopped, no model hop", projectID)
+}
+
+// retryIncompleteScaffold re-prompts once, on the same model, when the agent
+// "completed" without a compileable Go app. A missing file is not a provider
+// refusal, so this never hops and never marks the model dead.
 func (s *Service) retryIncompleteScaffold(ctx context.Context, projectID, requestID int64, onRetry func(newID int64)) bool {
 	project, err := s.repo.GetProject(ctx, projectID)
 	if err != nil {
@@ -317,42 +331,10 @@ func (s *Service) retryIncompleteScaffold(ctx context.Context, projectID, reques
 			return false
 		}
 		onRetry(newID)
-		log.Printf("project %d: incomplete scaffold after request %d — nudge as request %d", projectID, requestID, newID)
+		log.Printf("project %d: incomplete scaffold after request %d — same-model nudge as request %d", projectID, requestID, newID)
 		return true
 	}
-	// Nudge already used and still no main package — hop models.
-	n := 0
-	if v, ok := s.makeCreditRetry.Load(projectID); ok {
-		n, _ = v.(int)
-	}
-	if n >= maxMakeCreditRetries {
-		return false
-	}
-	if session, err := s.repo.GetSession(ctx, projectID); err == nil && session.Model != "" {
-		if s.deadModels == nil {
-			s.deadModels = map[string]bool{}
-		}
-		s.deadModels[session.Model] = true
-		_ = s.repo.SetSessionModel(ctx, session.ID, "")
-	}
-	msg, _ := s.repo.FirstBuildPrompt(ctx, projectID)
-	if strings.TrimSpace(msg) == "" {
-		msg, _ = s.repo.FirstUserMessage(ctx, requestID)
-	}
-	if strings.TrimSpace(msg) == "" {
-		msg = incompleteScaffoldNudge(original)
-	} else if !strings.Contains(msg, "You stopped before") {
-		msg = msg + "\n\n" + incompleteScaffoldNudge(original)
-	}
-	s.incompleteScaffold.Delete(projectID) // allow one nudge on the next model too
-	s.makeCreditRetry.Store(projectID, n+1)
-	newID, err := s.sendAgentMessage(ctx, projectID, "build", msg)
-	if err != nil || newID == 0 {
-		return false
-	}
-	onRetry(newID)
-	log.Printf("project %d: incomplete scaffold after request %d — model hop as request %d (attempt %d)", projectID, requestID, newID, n+1)
-	return true
+	return false
 }
 
 // maxMakeCreditRetries is how many times settleMake may hop to the next model
@@ -376,10 +358,17 @@ func (s *Service) retryMakeAfterCredit(ctx context.Context, projectID, requestID
 	if !pi.ModelRejected(errMsg) {
 		return false
 	}
-	// AgentError already marked the dead model/provider; clear sticky session
-	// model so modelForNewBuild picks the next candidate.
-	if session, err := s.repo.GetSession(ctx, projectID); err == nil && session.ID != 0 {
-		_ = s.repo.SetSessionModel(ctx, session.ID, "")
+	session, serr := s.repo.GetSession(ctx, projectID)
+	if serr != nil {
+		return false
+	}
+	next, err := s.modelForRetry(ctx, session.Model)
+	if err != nil || !realHop(session.Model, next) {
+		log.Printf("make project %d: refusal on %s — no other model, not hopping", projectID, session.Model)
+		return false
+	}
+	if err := s.pinSessionModel(ctx, projectID, next); err != nil {
+		return false
 	}
 	msg, err := s.repo.FirstUserMessage(ctx, requestID)
 	if err != nil || strings.TrimSpace(msg) == "" {
@@ -394,7 +383,7 @@ func (s *Service) retryMakeAfterCredit(ctx context.Context, projectID, requestID
 	}
 	s.makeCreditRetry.Store(projectID, n+1)
 	s.trackFrontDoor(newID, projectID)
-	log.Printf("make project %d: model refusal on request %d — retrying as request %d (attempt %d)", projectID, requestID, newID, n+1)
+	log.Printf("make project %d: refusal on %s request %d — switched to %s as request %d (attempt %d)", projectID, session.Model, requestID, next, newID, n+1)
 	return true
 }
 

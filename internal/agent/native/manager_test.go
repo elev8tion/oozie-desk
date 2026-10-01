@@ -136,8 +136,8 @@ func TestManagerToolLoop(t *testing.T) {
 	}
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
-	if sawMaxTokens != 1024 {
-		t.Fatalf("max_tokens=%d want 1024", sawMaxTokens)
+	if sawMaxTokens != 4096 {
+		t.Fatalf("max_tokens=%d want 4096", sawMaxTokens)
 	}
 	if sink.settled != "completed" {
 		t.Fatalf("settled=%q errs=%v", sink.settled, sink.errs)
@@ -242,5 +242,75 @@ func TestCreditRetryPromptSurvivesPriorRunCleanup(t *testing.T) {
 	}
 	if calls < 2 {
 		t.Fatalf("expected retry LLM call, calls=%d", calls)
+	}
+}
+
+func TestManagerStopsOnCutOffToolCall(t *testing.T) {
+	dir := t.TempDir()
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{
+				"finish_reason": "length",
+				"message": map[string]any{
+					"role": "assistant",
+					"tool_calls": []map[string]any{{
+						"id":   "c1",
+						"type": "function",
+						"function": map[string]any{
+							"name":      "write",
+							"arguments": `{"path":"main.go","content":"package main`,
+						},
+					}},
+				},
+			}},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	sink := &memSink{}
+	m := NewManager(DefaultCatalog(), sink, Keys{OpenRouter: "test-key"})
+	orig := http.DefaultTransport
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		req.URL.Scheme = "http"
+		req.URL.Host = strings.TrimPrefix(srv.URL, "http://")
+		return orig.RoundTrip(req)
+	})
+	t.Cleanup(func() { http.DefaultTransport = orig })
+	m.client = &ChatClient{Keys: Keys{OpenRouter: "test-key"}, HTTP: http.DefaultClient}
+
+	if err := m.Prompt(pi.StartOptions{
+		ProjectID: 7,
+		Workdir:   dir,
+		Model:     "openrouter/anthropic/claude-haiku-4.5",
+		Trusted:   true,
+	}, 3, "build a notes app"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		sink.mu.Lock()
+		done := sink.settled
+		sink.mu.Unlock()
+		if done != "" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	if sink.settled != "failed" {
+		t.Fatalf("settled=%q calls=%d errs=%v", sink.settled, calls, sink.errs)
+	}
+	if calls > 3 {
+		t.Fatalf("cut-off looped too long: calls=%d", calls)
+	}
+	if len(sink.errs) == 0 || !strings.Contains(sink.errs[0], "cut off") {
+		t.Fatalf("errs=%v", sink.errs)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "main.go")); err == nil {
+		t.Fatal("cut-off write must not land on disk")
 	}
 }

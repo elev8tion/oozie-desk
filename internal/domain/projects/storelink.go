@@ -245,6 +245,16 @@ func isGenericStoreBlurb(s string) bool {
 	return false
 }
 
+// isThinStoreChrome is a listing that names a product but only says
+// "download, see screenshots, ratings." It is not a feature spec.
+func isThinStoreChrome(s string) bool {
+	if isGenericStoreBlurb(s) {
+		return true
+	}
+	lower := strings.ToLower(strings.TrimSpace(s))
+	return strings.Contains(lower, "screenshots") && strings.Contains(lower, "ratings")
+}
+
 // preferProductTitle skips generic store-home titles when a real <title> exists.
 func preferProductTitle(candidate, fallback string) string {
 	candidate = cleanText(candidate)
@@ -424,6 +434,9 @@ func storeNameFromTitle(kind, title string) string {
 }
 
 func synthesizePlan(listing storeListing) string {
+	if isThinStoreChrome(listing.Description) {
+		return restrainPlan(listing.Name, fmt.Sprintf("Job: one local page for %s. The store page did not describe features, so do not invent them.\nScreens: one.\nFields: one text field and a save button.\nSaved: rows under data/.\nDone when: GET / shows the saved rows.", listing.Name))
+	}
 	source := "a public product listing"
 	switch listing.Kind {
 	case storeKindChrome:
@@ -448,7 +461,7 @@ func synthesizePlan(listing storeListing) string {
 	b.WriteString("Saved:\nAnything the user types, under data/ on this desk. Start empty. No imported store data.\n")
 	b.WriteString("Done when:\nGET / shows the job from the listing (not a brochure), the fields above work, and go build succeeds. Listen on $ADDR. Footer: Back to desk and Fix.\n")
 	b.WriteString("Flow:\nOpen the tool, do the job the listing describes, see the result on the page.\n")
-	return b.String()
+	return restrainPlan(listing.Name, b.String())
 }
 
 // planBulletsFromDescription turns listing copy into a few concrete goals so

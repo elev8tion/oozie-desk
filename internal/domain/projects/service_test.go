@@ -62,6 +62,25 @@ func TestCreateProjectValidation(t *testing.T) {
 	}
 }
 
+func TestFolderSlugStripsPathHostileNames(t *testing.T) {
+	got := folderSlug("Goodnotes: AI notes, docs, PDF")
+	if strings.ContainsAny(got, ":,/") || strings.Contains(got, " ") {
+		t.Fatalf("unsafe slug %q", got)
+	}
+	if got != "goodnotes-ai-notes-docs-pdf" {
+		t.Fatalf("slug=%q", got)
+	}
+	if !realHop("openrouter/anthropic/claude-haiku-4.5", "xai/grok-4.3") {
+		t.Fatal("different model should hop")
+	}
+	if realHop("openrouter/anthropic/claude-haiku-4.5", "openrouter/anthropic/claude-haiku-4.5") {
+		t.Fatal("same model is not a hop")
+	}
+	if realHop("openrouter/anthropic/claude-haiku-4.5", "") {
+		t.Fatal("empty next is not a hop")
+	}
+}
+
 func TestDefaultPathSkipsExistingDirectory(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {

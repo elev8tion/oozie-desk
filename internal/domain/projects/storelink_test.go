@@ -188,3 +188,21 @@ func TestRecipeDraftLifecycle(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	_ = os.RemoveAll(filepath.Join(home, "Projects", "pocket-ledger"))
 }
+
+func TestThinStoreChromeDoesNotBecomeASuite(t *testing.T) {
+	if !isThinStoreChrome("Download Goodnotes. See screenshots, ratings and reviews.") {
+		t.Fatal("expected thin chrome")
+	}
+	plan := synthesizePlan(storeListing{
+		Kind:        storeKindAppStore,
+		Name:        "Goodnotes",
+		URL:         "https://apps.apple.com/app/id1",
+		Description: "Download Goodnotes. See screenshots, ratings and reviews.",
+	})
+	if strings.Contains(plan, "See screenshots") {
+		t.Fatalf("plan echoed store chrome: %q", plan)
+	}
+	if !strings.Contains(plan, "under 180 lines") || !strings.Contains(plan, "Goodnotes") {
+		t.Fatalf("plan=%q", plan)
+	}
+}

@@ -32,6 +32,8 @@ type chatMessage struct {
 	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 	Name       string     `json:"name,omitempty"`
+	// FinishReason is copied from the choice. length means the reply was cut off.
+	FinishReason string `json:"-"`
 }
 
 type toolCall struct {
@@ -82,7 +84,9 @@ type chatResponse struct {
 }
 
 func (c *ChatClient) Complete(ctx context.Context, fullModel string, messages []chatMessage) (chatMessage, *piUsage, error) {
-	return c.complete(ctx, fullModel, messages, true, 1024)
+	// 4096 fits one small main.go. A cut-off reply is stopped in the tool loop,
+	// not retried as a model hop. A credit refusal on this cap is a real hop.
+	return c.complete(ctx, fullModel, messages, true, 4096)
 }
 
 // CompleteText is a single-turn completion without tools (recipe plans, etc.).
@@ -154,7 +158,9 @@ func (c *ChatClient) complete(ctx context.Context, fullModel string, messages []
 			Total:  parsed.Usage.TotalTokens,
 		}
 	}
-	return parsed.Choices[0].Message, usage, nil
+	msg := parsed.Choices[0].Message
+	msg.FinishReason = parsed.Choices[0].FinishReason
+	return msg, usage, nil
 }
 
 type piUsage struct {
@@ -181,7 +187,7 @@ func codingTools() []toolDef {
 		obj("read", "Read a UTF-8 text file under the project directory.",
 			map[string]any{"path": map[string]any{"type": "string", "description": "Relative or absolute path inside the project"}},
 			[]string{"path"}),
-		obj("write", "Create or overwrite a file under the project directory.",
+		obj("write", "Create or overwrite one complete file under the project directory. Keep it under 180 lines so the call is not cut off.",
 			map[string]any{
 				"path":    map[string]any{"type": "string"},
 				"content": map[string]any{"type": "string"},

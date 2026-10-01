@@ -2,6 +2,7 @@ package native
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,9 +12,11 @@ import (
 )
 
 const (
-	maxRounds     = 48
-	idleTimeout   = 30 * time.Minute
-	defaultSystem = "You are oozie's coding agent. Build and fix small Go web tools on disk. Prefer read/ls before write. Use bash for go test/build. Keep changes minimal and correct."
+	maxRounds       = 48
+	maxCutOffRounds = 2
+	idleTimeout     = 30 * time.Minute
+	defaultSystem   = "You are oozie's coding agent. Build one small Go web tool: one page, one main.go under 180 lines. No canvas, PDF engine, or second app. Write each file in one complete tool call. A cut-off write is a failure — write a smaller file instead. Prefer read/ls before write. Use bash for go build."
+	cutOffReply     = "the model reply was cut off before the file was written"
 )
 
 // Manager runs in-process LLM tool loops. Same surface as pi.Manager for the desk.
@@ -138,6 +141,7 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 	}
 
 	var lastErr error
+	cutOffs := 0
 	for round := 0; round < maxRounds; round++ {
 		if ctx.Err() != nil {
 			lastErr = ctx.Err()
@@ -160,12 +164,30 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 		}
 
 		if len(msg.ToolCalls) == 0 {
+			if msg.FinishReason == "length" {
+				cutOffs++
+				if cutOffs >= maxCutOffRounds {
+					lastErr = fmt.Errorf("%s", cutOffReply)
+					if m.sink != nil {
+						m.sink.AgentError(projectID, requestID, lastErr.Error())
+					}
+					break
+				}
+				messages = append(messages, chatMessage{Role: "assistant", Content: msg.Content})
+				messages = append(messages, chatMessage{Role: "user", Content: "Your last reply was cut off. Write main.go in one complete call, under 180 lines. Do not send a partial file."})
+				continue
+			}
 			text := strings.TrimSpace(msg.Content)
 			if text != "" && m.sink != nil {
 				m.sink.AssistantMessage(projectID, requestID, text)
 			}
 			lastErr = nil
 			break
+		}
+
+		broken := msg.FinishReason == "length" || callsBroken(msg.ToolCalls)
+		if broken {
+			cutOffs++
 		}
 
 		// Keep assistant turn with tool_calls for the API history.
@@ -201,7 +223,24 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 					continue
 				}
 			}
+			if broken || toolCallBroken(tc) {
+				body := "cut off: do not retry this call. Write a smaller main.go in one complete tool call, under 180 lines."
+				if m.sink != nil {
+					m.sink.ToolFinished(projectID, requestID, callID, name+" (cut off)", body)
+				}
+				messages = append(messages, chatMessage{
+					Role:       "tool",
+					ToolCallID: callID,
+					Name:       name,
+					Content:    body,
+				})
+				continue
+			}
 			summary, body, toolErr := runTool(ctx, opts.Workdir, name, args)
+			if toolErr != nil && (strings.Contains(body, "invalid tool arguments") || strings.Contains(body, "empty command")) {
+				cutOffs++
+				broken = true
+			}
 			if toolErr != nil && body == "" {
 				body = toolErr.Error()
 			}
@@ -215,6 +254,18 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 				Content:    body,
 			})
 		}
+		if broken && cutOffs >= maxCutOffRounds {
+			lastErr = fmt.Errorf("%s", cutOffReply)
+			if m.sink != nil {
+				m.sink.AgentError(projectID, requestID, lastErr.Error())
+			}
+			break
+		}
+		if broken {
+			messages = append(messages, chatMessage{Role: "user", Content: "That tool call was cut off. Write main.go now, under 180 lines, in one complete write call."})
+			continue
+		}
+		cutOffs = 0
 		if round == maxRounds-1 {
 			lastErr = fmt.Errorf("agent hit max tool rounds")
 		}
@@ -229,6 +280,35 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 	if m.sink != nil {
 		m.sink.RequestSettled(projectID, requestID, status)
 	}
+}
+
+func callsBroken(calls []toolCall) bool {
+	for _, tc := range calls {
+		if toolCallBroken(tc) {
+			return true
+		}
+	}
+	return false
+}
+
+func toolCallBroken(tc toolCall) bool {
+	args := strings.TrimSpace(tc.Function.Arguments)
+	if args == "" {
+		return true
+	}
+	var parsed map[string]any
+	if json.Unmarshal([]byte(args), &parsed) != nil {
+		return true
+	}
+	switch tc.Function.Name {
+	case "bash":
+		cmd, _ := parsed["command"].(string)
+		return strings.TrimSpace(cmd) == ""
+	case "write":
+		content, _ := parsed["content"].(string)
+		return strings.TrimSpace(content) == ""
+	}
+	return false
 }
 
 func (m *Manager) awaitPermission(ctx context.Context, projectID, requestID int64, tool, detail string) bool {

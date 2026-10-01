@@ -128,8 +128,17 @@ func (s *Service) retryWishAfterModel(ctx context.Context, projectID, requestID,
 	if err != nil || !pi.ModelRejected(errMsg) {
 		return false
 	}
-	if session, err := s.repo.GetSession(ctx, projectID); err == nil && session.ID != 0 {
-		_ = s.repo.SetSessionModel(ctx, session.ID, "")
+	session, serr := s.repo.GetSession(ctx, projectID)
+	if serr != nil {
+		return false
+	}
+	next, nerr := s.modelForRetry(ctx, session.Model)
+	if nerr != nil || !realHop(session.Model, next) {
+		log.Printf("wish %d: refusal on %s — no other model, not hopping", wishID, session.Model)
+		return false
+	}
+	if err := s.pinSessionModel(ctx, projectID, next); err != nil {
+		return false
 	}
 	msg, err := s.repo.FirstUserMessage(ctx, requestID)
 	if err != nil || strings.TrimSpace(msg) == "" {
@@ -143,7 +152,7 @@ func (s *Service) retryWishAfterModel(ctx context.Context, projectID, requestID,
 	}
 	s.wishRetryN.Store(wishID, n+1)
 	s.wishByRequest.Store(newID, wishID)
-	log.Printf("wish %d: model refusal on request %d — retrying as request %d (attempt %d)", wishID, requestID, newID, n+1)
+	log.Printf("wish %d: refusal on %s request %d — switched to %s as request %d (attempt %d)", wishID, session.Model, requestID, next, newID, n+1)
 	return true
 }
 

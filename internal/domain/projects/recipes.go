@@ -138,6 +138,10 @@ type textCompleter interface {
 
 func (s *Service) planFromStoreListing(ctx context.Context, listing storeListing) string {
 	fallback := synthesizePlan(listing)
+	// Store chrome is not a spec. Do not ask a model to invent a clone.
+	if isThinStoreChrome(listing.Description) {
+		return fallback
+	}
 	tc, ok := s.agent.(textCompleter)
 	if !ok || tc == nil {
 		return fallback
@@ -182,7 +186,7 @@ func (s *Service) planFromStoreListing(ctx context.Context, listing storeListing
 			!strings.Contains(plan, listing.URL) {
 			plan = fmt.Sprintf("Rebuild **%s** (from %s).\n\n%s", listing.Name, listing.URL, plan)
 		}
-		return plan
+		return restrainPlan(listing.Name, plan)
 	}
 	return fallback
 }
