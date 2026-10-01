@@ -27,9 +27,23 @@ import (
 //go:embed all:seeds
 var seedsFS embed.FS
 
+// CodingAgent is the desk build worker (in-repo native loop or legacy pi RPC).
+type CodingAgent interface {
+	Prompt(opts pi.StartOptions, requestID int64, message string) error
+	StopProject(projectID int64)
+	Abort(projectID int64) error
+	SetModel(projectID int64, model string) error
+	RespondValue(projectID int64, rpcID, value string) error
+	RespondConfirm(projectID int64, rpcID string, confirmed bool) error
+	RespondCancel(projectID int64, rpcID string) error
+	Streaming(projectID int64) bool
+	Stats(projectID int64) *pi.SessionStats
+	Shutdown()
+}
+
 type Service struct {
 	repo    *Repo
-	agent   *pi.Manager
+	agent   CodingAgent
 	catalog pi.Catalog
 	builder build.AppBuilder
 	jobs    sync.WaitGroup
@@ -180,11 +194,18 @@ func (s *Service) RecoverOrphanedJobs(ctx context.Context) {
 	}
 }
 
-// SetAgent wires the pi RPC manager after construction (the manager's
+// SetAgent wires the coding agent after construction (the manager's
 // event sink is this service, so the two reference each other).
-func (s *Service) SetAgent(agent *pi.Manager, catalog pi.Catalog) {
+func (s *Service) SetAgent(agent CodingAgent, catalog pi.Catalog) {
 	s.agent = agent
 	s.catalog = catalog
+}
+
+// UseCredentialGate sets how the desk discovers signed-in providers and
+// whether a model may start. Tests override with signedIn / modelProbe hooks.
+func (s *Service) UseCredentialGate(signed func() map[string]bool, probe func(string) error) {
+	s.signedIn = signed
+	s.modelProbe = probe
 }
 
 func (s *Service) Dashboard(ctx context.Context) (Dashboard, error) {
@@ -294,15 +315,16 @@ func (s *Service) modelForNewBuild(sessionModel string) (string, error) {
 			rejected = true
 			continue
 		}
-		probe := s.modelProbe
-		if probe == nil {
-			probe = pi.ProbeModel
+		// Nil probe = accept the first signed-in candidate (native agent).
+		// Tests and legacy pi wiring may still set modelProbe.
+		if s.modelProbe == nil {
+			return model, nil
 		}
-		err := probe(model)
+		err := s.modelProbe(model)
 		if err == nil {
 			return model, nil
 		}
-		if !pi.ModelRejected(err.Error()) && !strings.Contains(err.Error(), "did not answer") {
+		if !pi.ModelRejected(err.Error()) && !strings.Contains(err.Error(), "did not answer") && !strings.Contains(err.Error(), "No API key") {
 			return "", ErrValidation{err.Error()}
 		}
 		if s.deadModels == nil {
@@ -435,6 +457,28 @@ func (s *Service) SendAgentMessage(ctx context.Context, projectID int64, mode, m
 	return err
 }
 
+// recordFailedStart leaves a failed agent request when the build never
+// started (no model key, agent missing). Make-wait can then show the error
+// instead of spinning on "Starting."
+func (s *Service) recordFailedStart(ctx context.Context, projectID int64, msg string) {
+	if projectID == 0 || strings.TrimSpace(msg) == "" {
+		return
+	}
+	if status, _, err := s.repo.LatestRequest(ctx, projectID); err == nil && status != "" {
+		return
+	}
+	session, err := s.repo.GetSession(ctx, projectID)
+	if err != nil {
+		return
+	}
+	rid, err := s.repo.CreateAgentRequest(ctx, session.ID, "build", "(start failed)")
+	if err != nil {
+		return
+	}
+	_ = s.repo.InsertMessage(ctx, rid, "system", "error", msg)
+	_ = s.repo.CompleteRequest(ctx, rid, "failed")
+}
+
 // sendAgentMessage files an agent request and returns its ID so callers
 // (the improve loop, the fairy) can watch for it to settle.
 func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, message string) (int64, error) {
@@ -443,7 +487,7 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 		return 0, ErrValidation{"Message is required."}
 	}
 	if s.agent == nil {
-		return 0, ErrValidation{"The pi agent is not configured."}
+		return 0, ErrValidation{"The coding agent is not configured."}
 	}
 	project, err := s.repo.GetProject(ctx, projectID)
 	if err != nil {
@@ -489,9 +533,9 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 		Trusted:      project.Trusted,
 	}
 	if err := s.agent.Prompt(opts, requestID, wrapModeMessage(mode, message)); err != nil {
-		_ = s.repo.InsertMessage(ctx, requestID, "system", "error", "Failed to start pi: "+err.Error())
+		_ = s.repo.InsertMessage(ctx, requestID, "system", "error", "Failed to start agent: "+err.Error())
 		_ = s.repo.CompleteRequest(ctx, requestID, "failed")
-		return 0, ErrValidation{"Could not reach the pi agent: " + err.Error()}
+		return 0, ErrValidation{"Could not start the coding agent: " + err.Error()}
 	}
 	return requestID, nil
 }
@@ -704,6 +748,7 @@ func (s *Service) RemixApp(ctx context.Context, appID int64, mutation string) (P
 	msg := fmt.Sprintf("This project is a remix of %q — its source was copied here as the starting point (runtime data/ and databases were left behind so this desk starts empty).\n\nMutation requested by the user:\n\n%s\n\nApply the mutation: rename the tool appropriately (module path, page title, and any user-visible names), implement the change, keep what still serves the new purpose, delete what doesn't, and verify with 'go build -o /tmp/remix .'. Keep durable records under data/ only. The tool must keep listening on $ADDR.", app.Name, mutation)
 	requestID, err := s.sendAgentMessage(ctx, remix.ID, "build", msg)
 	if err != nil {
+		s.recordFailedStart(ctx, remix.ID, err.Error())
 		return remix, err
 	}
 	s.trackFrontDoor(requestID, remix.ID)

@@ -94,7 +94,7 @@ func (s *Service) SetupHint() string {
 		signed = s.signedIn()
 	}
 	if len(pi.CandidateModels(s.catalog, "", signed)) == 0 {
-		return "No model is signed in. In a terminal run pi /login, pick a provider, then come back and build."
+		return "No model API key is set. Add OPENROUTER_API_KEY (or another provider key) in the environment, or keep a key in ~/.pi/agent/auth.json, then come back and build."
 	}
 	return ""
 }

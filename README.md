@@ -1,6 +1,6 @@
 # oozie (web fork)
 
-A local desk for small personal tools. You describe a tool, your local **pi** agent builds it, and oozie opens it on localhost. A company is a circle of desks that pair by invitation. A share sends the recipe, never the data.
+A local desk for small personal tools. You describe a tool, the **in-repo coding agent** builds it with your LLM API key, and oozie opens it on localhost. A company is a circle of desks that pair by invitation. A share sends the recipe, never the data.
 
 This is a copy of the Mac factory. The original at `/Users/kc/oozie` is unchanged. This fork does not install anything into `/Applications`.
 
@@ -42,11 +42,14 @@ Data lives in `~/Library/Application Support/oozie-web/app.db`.
 ## Requirements
 
 - Go 1.24+
-- [pi](https://github.com/) installed (`~/.pi/agent/settings.json`)
+- An LLM API key (OpenRouter recommended). The desk agent talks OpenAI-compatible chat APIs itself — no external `pi` binary.
 
 ## Environment variables
 
 - `ADDR` (default `127.0.0.1:8090`)
 - `DATABASE_PATH` (default `~/Library/Application Support/oozie-web/app.db`)
-- `PI_BIN` (default `pi`)
+- `OPENROUTER_API_KEY` — preferred build key (also `XAI_API_KEY`, `ZAI_API_KEY`, `OPENAI_API_KEY`)
+- `OOZIE_AUTH_PATH` — optional override of `~/.pi/agent/auth.json` for keys/catalog compatibility
 - `OOZIE_OPEN_BROWSER=1` — open the UI on start
+
+Optional: if `~/.pi/agent/settings.json` lists enabled models, the desk reuses that catalog. Otherwise it ships a small default list.

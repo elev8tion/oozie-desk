@@ -268,6 +268,8 @@ func (s *Service) importRecipeJSON(ctx context.Context, raw string) (Project, er
 	}
 	requestID, err := s.sendAgentMessage(ctx, project.ID, "build", b.String())
 	if err != nil {
+		// Leave a failed request so /make does not spin on "Starting." forever.
+		s.recordFailedStart(ctx, project.ID, err.Error())
 		return project, err
 	}
 	s.trackFrontDoor(requestID, project.ID)

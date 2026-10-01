@@ -288,7 +288,7 @@ func (h *Handlers) AnswerQuestion(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	err := h.service.AnswerQuestion(r.Context(), qid, r.FormValue("answer"))
 	page, _ := h.service.AgentPage(r.Context(), id)
-	flash := "Answer sent to pi."
+	flash := "Answer sent."
 	if err != nil {
 		flash = err.Error()
 	}
@@ -325,6 +325,7 @@ func (h *Handlers) Permission(w http.ResponseWriter, r *http.Request) {
 	}
 	h.renderer.HTML(w, 200, "partials/agents/pending", render.ViewData{Flash: flash, Data: map[string]any{"Agent": page}})
 }
+
 // ImprovePage is the fix form every published tool links from its footer.
 func (h *Handlers) ImprovePage(w http.ResponseWriter, r *http.Request) {
 	app, err := h.service.AppBySlug(r.Context(), r.PathValue("slug"))

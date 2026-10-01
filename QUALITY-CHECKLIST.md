@@ -4,7 +4,7 @@ Tick when verified with a real run or test evidence.
 
 ## 1. Desk auth / setup help
 - [x] Desk shows a setup notice when no model is signed in (before you submit) — `SetupHint` + desk template
-- [x] Failed Make still lands on desk with `This model is not signed in.` plus how to fix it (`pi /login`) — `TestMakeUnsignedModelStopsAtTheFrontDoor`
+- [x] Failed Make still lands on desk with `This model is not signed in.` plus how to fix it (API key / `OPENROUTER_API_KEY`) — `TestMakeUnsignedModelStopsAtTheFrontDoor`
 - [x] Build button stays usable; Make refuses cleanly until signed in — same test
 
 ## 2. Fix → wait → reopen /run
@@ -36,7 +36,14 @@ Tick when verified with a real run or test evidence.
 ```
 go test ./... -count=1  → all ok
 TestDeadPathsRedirectHome PASS
-TestMakeUnsignedModelStopsAtTheFrontDoor PASS (includes pi /login)
+TestMakeUnsignedModelStopsAtTheFrontDoor PASS (API key setup copy)
 TestSetupHintWhenUnsigned PASS
 TestImproveStatusPhases PASS
 ```
+
+## 6. In-repo coding agent (replaces external pi)
+- [x] `internal/agent/native` OpenAI-compatible chat + tools (bash/read/write/edit/ls)
+- [x] `app.New` wires `native.NewManager` via `projects.CodingAgent`
+- [x] Credentials: env keys or `~/.pi/agent/auth.json`; probe is key check, not `pi` RPC
+- [x] Recipe import records failed start so make-wait is not infinite “Starting.”
+- [x] Tests: `go test ./internal/agent/native ./internal/domain/projects ./internal/app`

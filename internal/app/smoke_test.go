@@ -152,7 +152,7 @@ func TestMakeUnsignedModelStopsAtTheFrontDoor(t *testing.T) {
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "This model is not signed in.") {
 		t.Fatalf("desk did not show the sentence: %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "pi /login") {
+	if !strings.Contains(rec.Body.String(), "OPENROUTER_API_KEY") {
 		t.Fatalf("desk did not show setup help: %s", rec.Body.String())
 	}
 	req = httptest.NewRequest("GET", "/projects", nil)

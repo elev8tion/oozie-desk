@@ -7,7 +7,7 @@
   {{if $d.Err}}
   <p class="danger">{{$d.Err}}</p>
   {{if eq $d.Err "This model is not signed in."}}
-  <div class="notice">Sign in first: open a terminal and run <code>pi /login</code>, pick a provider, then try again.</div>
+  <div class="notice">Add an API key first: set <code>OPENROUTER_API_KEY</code> (or another provider key), or keep a key in <code>~/.pi/agent/auth.json</code>, then try again.</div>
   {{end}}
   {{else if $d.Setup}}
   <div class="notice">{{$d.Setup}}</div>

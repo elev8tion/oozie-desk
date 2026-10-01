@@ -33,6 +33,42 @@ func TestPlainPageErrorHidesPiAuth(t *testing.T) {
 	}
 }
 
+func TestRecordFailedStartLeavesFailedRequest(t *testing.T) {
+	ctx := context.Background()
+	s := newTestService(t)
+	p, err := s.CreateProject(ctx, "Stuck", t.TempDir(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.recordFailedStart(ctx, p.ID, "This model is not signed in.")
+	status, errMsg, err := s.repo.LatestRequest(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" {
+		t.Fatalf("status=%q want failed", status)
+	}
+	if !strings.Contains(errMsg, "not signed in") {
+		t.Fatalf("errMsg=%q", errMsg)
+	}
+	// Second call must not stack another request.
+	s.recordFailedStart(ctx, p.ID, "again")
+	status2, _, err := s.repo.LatestRequest(ctx, p.ID)
+	if err != nil || status2 != "failed" {
+		t.Fatalf("second status=%q err=%v", status2, err)
+	}
+	reqs, err := s.repo.ListRequests(ctx, (func() int64 {
+		session, _ := s.repo.GetSession(ctx, p.ID)
+		return session.ID
+	})())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reqs) != 1 {
+		t.Fatalf("requests=%d want 1", len(reqs))
+	}
+}
+
 func TestSetupHintWhenUnsigned(t *testing.T) {
 	s := newTestService(t)
 	s.catalog = pi.Catalog{
@@ -43,7 +79,7 @@ func TestSetupHintWhenUnsigned(t *testing.T) {
 	}
 	s.signedIn = func() map[string]bool { return map[string]bool{} }
 	hint := s.SetupHint()
-	if hint == "" || !strings.Contains(hint, "pi /login") {
+	if hint == "" || !strings.Contains(hint, "OPENROUTER_API_KEY") {
 		t.Fatalf("setup hint = %q", hint)
 	}
 	s.signedIn = func() map[string]bool { return map[string]bool{"openrouter": true} }

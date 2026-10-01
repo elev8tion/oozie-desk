@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"io/fs"
 
+	"oozie/internal/agent/native"
 	"oozie/internal/agent/pi"
 	"oozie/internal/domain/hub"
 	"oozie/internal/domain/projects"
@@ -16,7 +17,7 @@ type App struct {
 	database   *sql.DB
 	renderer   *render.Renderer
 	static     fs.FS
-	agent      *pi.Manager
+	agent      projects.CodingAgent
 	service    *projects.Service
 	hub        *hub.Service
 	stopClocks context.CancelFunc
@@ -25,9 +26,16 @@ type App struct {
 func New(config Config, database *sql.DB, renderer *render.Renderer, static fs.FS) *App {
 	repo := projects.NewRepo(database)
 	service := projects.NewService(repo)
-	catalog := pi.LoadCatalog()
-	agent := pi.NewManager(catalog, service)
+	catalog := native.MergeCatalog(pi.LoadCatalog())
+	keys := native.LoadKeys()
+	agent := native.NewManager(catalog, service, keys)
 	service.SetAgent(agent, catalog)
+	// Prefer keys from env + auth file; do not spawn external pi to probe models.
+	service.UseCredentialGate(func() map[string]bool {
+		return native.SignedFromKeys(native.LoadKeys())
+	}, func(model string) error {
+		return agent.HasKeyFor(model)
+	})
 	service.SetBaseURL("http://" + config.Addr)
 	service.RecoverOrphanedJobs(context.Background())
 	service.ReclaimRuntimes(context.Background())
@@ -38,7 +46,7 @@ func New(config Config, database *sql.DB, renderer *render.Renderer, static fs.F
 	return &App{config: config, database: database, renderer: renderer, static: static, agent: agent, service: service, hub: desk, stopClocks: stopClocks}
 }
 
-// Shutdown stops background clocks, published app servers, and pi agents.
+// Shutdown stops background clocks, published app servers, and the coding agent.
 func (a *App) Shutdown() {
 	a.stopClocks()
 	a.hub.Stop()
