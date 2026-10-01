@@ -46,4 +46,6 @@ TestImproveStatusPhases PASS
 - [x] `app.New` wires `native.NewManager` via `projects.CodingAgent`
 - [x] Credentials: env keys or `~/.pi/agent/auth.json`; probe is key check, not `pi` RPC
 - [x] Recipe import records failed start so make-wait is not infinite “Starting.”
+- [x] Thin-credit hardening: capped `max_tokens`, empty `content` on tool turns, cheap-first candidates, dead provider after credit refusals
+- [x] Live E2E: Make → `xai/grok-4.3` → publish → `/run` (Tiny Go Page on `http://127.0.0.1:50596`)
 - [x] Tests: `go test ./internal/agent/native ./internal/domain/projects ./internal/app`

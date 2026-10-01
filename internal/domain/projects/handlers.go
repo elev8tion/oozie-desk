@@ -319,7 +319,7 @@ func (h *Handlers) Permission(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	err := h.service.ResolvePermission(r.Context(), rid, r.FormValue("decision") != "deny")
 	page, _ := h.service.AgentPage(r.Context(), id)
-	flash := "Permission decision sent to pi."
+	flash := "Permission decision sent."
 	if err != nil {
 		flash = err.Error()
 	}
