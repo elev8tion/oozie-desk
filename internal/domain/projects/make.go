@@ -251,21 +251,27 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 	}
 }
 
-// retryMakeAfterCredit starts one more front-door build on the next model when
+// maxMakeCreditRetries is how many times settleMake may hop to the next model
+// after credit/quota refusals (openrouter → zai → xai, etc.).
+const maxMakeCreditRetries = 4
+
+// retryMakeAfterCredit starts another front-door build on the next model when
 // the previous attempt died on credits/quota. Returns true if a retry started.
 func (s *Service) retryMakeAfterCredit(ctx context.Context, projectID, requestID int64) bool {
-	if _, already := s.makeCreditRetry.LoadOrStore(projectID, true); already {
+	n := 0
+	if v, ok := s.makeCreditRetry.Load(projectID); ok {
+		n, _ = v.(int)
+	}
+	if n >= maxMakeCreditRetries {
 		return false
 	}
 	_, errMsg, err := s.repo.RequestStatus(ctx, requestID)
 	if err != nil {
-		s.makeCreditRetry.Delete(projectID)
 		return false
 	}
 	low := strings.ToLower(errMsg)
 	if !strings.Contains(low, "credit") && !strings.Contains(low, "insufficient") &&
 		!strings.Contains(low, "max_tokens") && !strings.Contains(low, "quota") {
-		s.makeCreditRetry.Delete(projectID)
 		return false
 	}
 	// AgentError already marked the dead model/provider; clear sticky session
@@ -275,17 +281,18 @@ func (s *Service) retryMakeAfterCredit(ctx context.Context, projectID, requestID
 	}
 	msg, err := s.repo.FirstUserMessage(ctx, requestID)
 	if err != nil || strings.TrimSpace(msg) == "" {
-		s.makeCreditRetry.Delete(projectID)
 		return false
 	}
 	s.makeByRequest.Delete(requestID)
 	newID, err := s.sendAgentMessage(ctx, projectID, "build", msg)
 	if err != nil || newID == 0 {
-		// Keep the retry flag so we don't thrash; waiting screen shows the failure.
+		// Count the attempt so we don't thrash; waiting screen shows the failure.
+		s.makeCreditRetry.Store(projectID, n+1)
 		return false
 	}
+	s.makeCreditRetry.Store(projectID, n+1)
 	s.trackFrontDoor(newID, projectID)
-	log.Printf("make project %d: credit refusal on request %d — retrying as request %d", projectID, requestID, newID)
+	log.Printf("make project %d: credit refusal on request %d — retrying as request %d (attempt %d)", projectID, requestID, newID, n+1)
 	return true
 }
 

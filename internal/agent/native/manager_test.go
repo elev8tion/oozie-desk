@@ -159,3 +159,88 @@ func osRead(dir, name string) (string, error) {
 	b, err := os.ReadFile(filepath.Join(dir, name))
 	return string(b), err
 }
+
+// retrySink starts a second Prompt from RequestSettled (credit-retry shape).
+type retrySink struct {
+	memSink
+	m        *Manager
+	opts     pi.StartOptions
+	retried  bool
+	secondID int64
+}
+
+func (r *retrySink) RequestSettled(projectID, requestID int64, status string) {
+	r.memSink.RequestSettled(projectID, requestID, status)
+	if r.retried || status != "failed" || requestID != 1 {
+		return
+	}
+	r.retried = true
+	r.secondID = 2
+	if err := r.m.Prompt(r.opts, 2, "retry build"); err != nil {
+		r.mu.Lock()
+		r.errs = append(r.errs, "retry prompt: "+err.Error())
+		r.mu.Unlock()
+	}
+}
+
+// TestCreditRetryPromptSurvivesPriorRunCleanup proves the first run's defer
+// must not cancel a credit-retry session started from RequestSettled.
+func TestCreditRetryPromptSurvivesPriorRunCleanup(t *testing.T) {
+	dir := t.TempDir()
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		if calls == 1 {
+			http.Error(w, `{"error":{"message":"This request requires more credits, or fewer max_tokens. You requested up to 1024 tokens, but can only afford 511."}}`, 402)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{
+				"message": map[string]any{"role": "assistant", "content": "retry ok"},
+			}},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	opts := pi.StartOptions{ProjectID: 42, Workdir: dir, Model: "openrouter/anthropic/claude-haiku-4.5", Trusted: true}
+	sink := &retrySink{opts: opts}
+	m := NewManager(DefaultCatalog(), sink, Keys{OpenRouter: "test-key"})
+	sink.m = m
+	m.client = &ChatClient{Keys: Keys{OpenRouter: "test-key"}, HTTP: http.DefaultClient}
+	orig := http.DefaultTransport
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		req.URL.Scheme = "http"
+		req.URL.Host = strings.TrimPrefix(srv.URL, "http://")
+		return orig.RoundTrip(req)
+	})
+	t.Cleanup(func() { http.DefaultTransport = orig })
+
+	if err := m.Prompt(opts, 1, "first build"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		sink.mu.Lock()
+		done := sink.settled == "completed" && sink.retried
+		sink.mu.Unlock()
+		if done {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	if !sink.retried {
+		t.Fatalf("expected credit retry Prompt, errs=%v settled=%q", sink.errs, sink.settled)
+	}
+	if sink.settled != "completed" {
+		t.Fatalf("retry settled=%q errs=%v calls=%d", sink.settled, sink.errs, calls)
+	}
+	if len(sink.messages) == 0 || !strings.Contains(sink.messages[len(sink.messages)-1], "retry ok") {
+		t.Fatalf("messages=%v errs=%v", sink.messages, sink.errs)
+	}
+	if calls < 2 {
+		t.Fatalf("expected retry LLM call, calls=%d", calls)
+	}
+}

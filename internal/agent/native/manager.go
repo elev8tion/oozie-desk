@@ -29,6 +29,7 @@ type Manager struct {
 type session struct {
 	opts     pi.StartOptions
 	cancel   context.CancelFunc
+	gen      uint64 // bumps each Prompt; run cleanup only touches matching gen
 	busy     bool
 	stats    pi.SessionStats
 	pending  map[string]chan bool // permission rpcID -> answer
@@ -97,32 +98,35 @@ func (m *Manager) Prompt(opts pi.StartOptions, requestID int64, message string) 
 	s.opts = opts
 	ctx, cancel := context.WithTimeout(context.Background(), idleTimeout)
 	s.cancel = cancel
+	s.gen++
+	myGen := s.gen
 	s.busy = true
 	m.mu.Unlock()
 
-	go m.run(ctx, opts.ProjectID, requestID, message)
+	go m.run(ctx, opts.ProjectID, requestID, message, myGen)
 	return nil
 }
 
-func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg string) {
-	// Release busy before RequestSettled so front-door credit retries can start
-	// a new Prompt on this project without "agent already running".
-	defer func() {
-		m.mu.Lock()
-		if s := m.sessions[projectID]; s != nil {
-			s.busy = false
-			if s.cancel != nil {
-				s.cancel()
-				s.cancel = nil
-			}
-		}
-		m.mu.Unlock()
-	}()
-
+func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg string, gen uint64) {
 	m.mu.Lock()
 	s := m.sessions[projectID]
 	opts := s.opts
 	m.mu.Unlock()
+
+	// Only clear busy/cancel if we still own the session slot. RequestSettled may
+	// start a credit retry that bumps gen; touching that session would kill the
+	// retry mid-flight (failed request with only the user message).
+	release := func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		s := m.sessions[projectID]
+		if s == nil || s.gen != gen {
+			return
+		}
+		s.busy = false
+		s.cancel = nil
+	}
+	defer release()
 
 	sys := strings.TrimSpace(opts.SystemPrompt)
 	if sys == "" {
@@ -221,15 +225,7 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 		status = "failed"
 	}
 	// Drop busy before sink settle so credit-retry can Prompt the same project.
-	m.mu.Lock()
-	if s := m.sessions[projectID]; s != nil {
-		s.busy = false
-		if s.cancel != nil {
-			s.cancel()
-			s.cancel = nil
-		}
-	}
-	m.mu.Unlock()
+	release()
 	if m.sink != nil {
 		m.sink.RequestSettled(projectID, requestID, status)
 	}
