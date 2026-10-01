@@ -666,11 +666,11 @@ func (r *Repo) InstalledApps(ctx context.Context) ([]StoreApp, error) {
 
 func (r *Repo) GetSettings(ctx context.Context) (Settings, error) {
 	var s Settings
-	err := r.db.QueryRowContext(ctx, `SELECT appearance,style_profile,fairy_enabled,fairy_hour FROM user_settings WHERE user_id=?`, r.actor.UserID).Scan(&s.Appearance, &s.StyleProfile, &s.FairyEnabled, &s.FairyHour)
+	err := r.db.QueryRowContext(ctx, `SELECT appearance,style_profile,fairy_enabled,fairy_hour,COALESCE(coding_model,'') FROM user_settings WHERE user_id=?`, r.actor.UserID).Scan(&s.Appearance, &s.StyleProfile, &s.FairyEnabled, &s.FairyHour, &s.CodingModel)
 	return s, err
 }
 func (r *Repo) SaveSettings(ctx context.Context, s Settings) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE user_settings SET appearance=?,style_profile=?,fairy_enabled=?,fairy_hour=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`, s.Appearance, s.StyleProfile, s.FairyEnabled, s.FairyHour, r.actor.UserID)
+	_, err := r.db.ExecContext(ctx, `UPDATE user_settings SET appearance=?,style_profile=?,fairy_enabled=?,fairy_hour=?,coding_model=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`, s.Appearance, s.StyleProfile, s.FairyEnabled, s.FairyHour, s.CodingModel, r.actor.UserID)
 	return err
 }
 

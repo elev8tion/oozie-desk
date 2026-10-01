@@ -681,10 +681,16 @@ func (s *Service) Desk(ctx context.Context, text, errMsg, flash string) (Desk, e
 	if errMsg == "" {
 		setup = s.projects.SetupHint()
 	}
+	model, projectModels, signed := s.projects.ModelChoices(ctx)
+	models := make([]ModelChoice, 0, len(projectModels))
+	for _, m := range projectModels {
+		models = append(models, ModelChoice{Provider: m.Provider, ID: m.ID, Full: m.Full})
+	}
 	return Desk{
 		Text: text, Err: errMsg, Flash: flash, Setup: setup,
 		Apps: apps, Inbox: inbox, Peers: peers, Grants: grants,
 		Insights: s.projects.Insights(ctx),
 		Connect:  s.Addr() != "", Addr: s.Addr(),
+		Model: model, Models: models, Signed: signed,
 	}, nil
 }

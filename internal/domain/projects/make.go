@@ -46,11 +46,22 @@ type ImproveView struct {
 // Make is the front door: one sentence becomes a trusted project, an agent
 // build, and — when that build finishes — a running localhost tool.
 func (s *Service) Make(ctx context.Context, text string) (int64, error) {
+	return s.MakeWithModel(ctx, text, "")
+}
+
+// MakeWithModel builds from the desk. model, when set, becomes the desk preferred
+// coding model and is used for this build (reviving hop memory for that pick).
+func (s *Service) MakeWithModel(ctx context.Context, text, model string) (int64, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0, ErrValidation{"Describe the tool."}
 	}
-	if _, err := s.modelForNewBuild(""); err != nil {
+	if model = strings.TrimSpace(model); model != "" {
+		if err := s.SetCodingModel(ctx, model); err != nil {
+			return 0, err
+		}
+	}
+	if _, err := s.modelForNewBuildCtx(ctx, ""); err != nil {
 		return 0, err
 	}
 	name := wishProjectName(text)
@@ -60,6 +71,13 @@ func (s *Service) Make(ctx context.Context, text string) (int64, error) {
 	project, err := s.CreateProject(ctx, name, "", true)
 	if err != nil {
 		return 0, err
+	}
+	// Pin the new session to the desk preferred model so hops start from the pick.
+	if session, err := s.repo.GetSession(ctx, project.ID); err == nil {
+		prefer := s.preferredSessionModel(ctx, "")
+		if prefer != "" {
+			_ = s.repo.SetSessionModel(ctx, session.ID, prefer)
+		}
 	}
 	draft := PublishDraft{
 		ProjectID:   project.ID,

@@ -1,0 +1,15 @@
+{{define "partials/desk/model"}}
+{{$model := index .Data "Model"}}
+{{$models := index .Data "Models"}}
+{{$signed := index .Data "Signed"}}
+{{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
+<label class="model-picker">Model
+  <select name="model" hx-post="/settings/model" hx-target="#desk-model-picker" hx-swap="innerHTML" hx-trigger="change" hx-include="this" hx-vals='{"surface":"desk"}'>
+    {{range $models}}
+    <option value="{{.Full}}" {{if eq .Full $model}}selected{{end}}>{{.Full}}{{if $signed}}{{if index $signed .Provider}} · ready{{else}} · needs key{{end}}{{end}}</option>
+    {{else}}
+    <option value="">No models in catalog</option>
+    {{end}}
+  </select>
+</label>
+{{end}}

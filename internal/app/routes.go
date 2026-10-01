@@ -103,6 +103,8 @@ func (a *App) Routes() http.Handler {
 
 	mux.HandleFunc("GET /settings", h.Settings)
 	mux.HandleFunc("POST /settings", h.SaveSettings)
+	mux.HandleFunc("POST /settings/model", h.SaveCodingModel)
+	mux.HandleFunc("POST /settings/models/clear-dead", h.ClearDeadModels)
 	mux.HandleFunc("POST /settings/taste", h.SaveTaste)
 	mux.HandleFunc("/", h.NotFound)
 

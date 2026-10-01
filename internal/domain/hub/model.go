@@ -75,4 +75,15 @@ type Desk struct {
 	Insights any
 	Connect  bool
 	Addr     string
+	// Model control — operator picks anytime; signed providers only show as ready.
+	Model   string
+	Models  []ModelChoice
+	Signed  map[string]bool
+}
+
+// ModelChoice is one catalog entry for the desk picker.
+type ModelChoice struct {
+	Provider string
+	ID       string
+	Full     string
 }

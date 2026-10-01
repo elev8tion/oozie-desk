@@ -135,3 +135,50 @@ func TestMakeSkipsAModelThatDoesNotAnswer(t *testing.T) {
 		t.Fatalf("project created after every model failed: %+v", projects)
 	}
 }
+
+func TestSetCodingModelRevivesAndPrefers(t *testing.T) {
+	s := newTestService(t)
+	s.catalog = pi.Catalog{
+		DefaultModel: "openrouter/anthropic/claude-haiku-4.5",
+		Models: []pi.ModelOption{
+			{Provider: "openrouter", ID: "claude-haiku-4.5", Full: "openrouter/anthropic/claude-haiku-4.5"},
+			{Provider: "xai", ID: "grok-4.3", Full: "xai/grok-4.3"},
+		},
+	}
+	s.signedIn = func() map[string]bool {
+		return map[string]bool{"openrouter": true, "xai": true}
+	}
+	s.deadModels = map[string]bool{
+		"xai/grok-4.3":   true,
+		"provider:xai":   true,
+	}
+	if err := s.SetCodingModel(context.Background(), "xai/grok-4.3"); err != nil {
+		t.Fatal(err)
+	}
+	if s.deadModels["xai/grok-4.3"] || s.deadModels["provider:xai"] {
+		t.Fatalf("manual pick should revive model/provider: %#v", s.deadModels)
+	}
+	got, err := s.modelForNewBuildCtx(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "xai/grok-4.3" {
+		t.Fatalf("preferred = %s", got)
+	}
+	st, err := s.GetSettings(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.CodingModel != "xai/grok-4.3" {
+		t.Fatalf("settings coding model = %q", st.CodingModel)
+	}
+}
+
+func TestClearDeadModels(t *testing.T) {
+	s := newTestService(t)
+	s.deadModels = map[string]bool{"openrouter/x": true, "provider:openrouter": true}
+	s.ClearDeadModels()
+	if s.deadModels != nil {
+		t.Fatalf("deadModels = %#v", s.deadModels)
+	}
+}

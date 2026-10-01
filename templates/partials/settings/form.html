@@ -1,7 +1,31 @@
 {{define "partials/settings/form"}}
 {{$s := index .Data "Settings"}}
+{{$models := index .Data "Models"}}
+{{$signed := index .Data "Signed"}}
+{{$model := index .Data "Model"}}
+{{if not $model}}{{$model = $s.CodingModel}}{{end}}
+{{/* $model falls back to Settings.CodingModel when the page first loads */}}
 {{if .Flash}}<div class="notice good">{{.Flash}}</div>{{end}}
 <form class="panel form-stack" hx-post="/settings" hx-target="#settings-panel">
+  <fieldset><legend>Coding model</legend>
+    <label>Preferred model
+      <select name="coding_model">
+        {{range $models}}
+        <option value="{{.Full}}" {{if eq .Full $model}}selected{{end}}>{{.Full}}{{if $signed}}{{if index $signed .Provider}} · ready{{else}} · needs key{{end}}{{end}}</option>
+        {{else}}
+        <option value="">No models in catalog</option>
+        {{end}}
+      </select>
+    </label>
+    <p class="muted">Used for Make, Fix, Wish, Remix, recipes, and new agent sessions. Change anytime — a manual pick also clears temporary skips for that provider so you can retry it.</p>
+    {{if $signed}}
+    <p class="muted">Signed providers:
+      {{range $p, $ok := $signed}}{{if $ok}}<code>{{$p}}</code> {{end}}{{end}}
+    </p>
+    {{else}}
+    <p class="muted">No API keys found. Set <code>OPENROUTER_API_KEY</code> / <code>XAI_API_KEY</code> / <code>ZAI_API_KEY</code> or keep keys in <code>~/.pi/agent/auth.json</code>.</p>
+    {{end}}
+  </fieldset>
   <fieldset><legend>Appearance</legend>
     <label>Theme<select name="appearance">
       <option value="system"{{if eq $s.Appearance "system"}} selected{{end}}>System</option>
@@ -23,5 +47,9 @@
     <p class="muted">Up to three wishes per night become trusted projects, built and started on this desk while you sleep. oozie must be running.</p>
   </fieldset>
   <button class="button primary">Save settings</button>
+</form>
+<form class="panel form-stack stack-sm" hx-post="/settings/models/clear-dead" hx-target="#settings-panel">
+  <p class="muted">If a free model overloaded earlier, oozie may skip it until restart. Clear that memory without changing your preferred model.</p>
+  <button class="button">Clear automatic model skips</button>
 </form>
 {{end}}

@@ -311,12 +311,92 @@ func authPath() string {
 	return pi.DefaultAuthPath()
 }
 
+// preferredSessionModel is the model the operator wants first: project session,
+// else desk-wide coding model, else catalog default.
+func (s *Service) preferredSessionModel(ctx context.Context, sessionModel string) string {
+	if strings.TrimSpace(sessionModel) != "" {
+		return strings.TrimSpace(sessionModel)
+	}
+	if st, err := s.repo.GetSettings(ctx); err == nil {
+		if m := strings.TrimSpace(st.CodingModel); m != "" {
+			return m
+		}
+	}
+	return s.catalog.DefaultModel
+}
+
+// ModelChoices powers desk/settings pickers: current preferred model, catalog,
+// and which providers have keys.
+func (s *Service) ModelChoices(ctx context.Context) (current string, models []ModelOption, signed map[string]bool) {
+	signed = pi.SignedProviders(authPath())
+	if s.signedIn != nil {
+		signed = s.signedIn()
+	}
+	current = s.preferredSessionModel(ctx, "")
+	models = s.models()
+	return current, models, signed
+}
+
+// reviveModel clears in-process hop memory so a manual pick is tried again.
+func (s *Service) reviveModel(model string) {
+	if s.deadModels == nil || model == "" {
+		return
+	}
+	delete(s.deadModels, model)
+	if p := providerOf(model); p != "" {
+		delete(s.deadModels, "provider:"+p)
+	}
+}
+
+// ClearDeadModels drops automatic hop blacklists so every signed model is fair game again.
+func (s *Service) ClearDeadModels() {
+	s.deadModels = nil
+}
+
+// SetCodingModel saves the desk-wide preferred model and revives it for hops.
+func (s *Service) SetCodingModel(ctx context.Context, model string) error {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		st, err := s.repo.GetSettings(ctx)
+		if err != nil {
+			return err
+		}
+		st.CodingModel = ""
+		return s.repo.SaveSettings(ctx, st)
+	}
+	found := false
+	for _, m := range s.catalog.Models {
+		if m.Full == model {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ErrValidation{"Unknown model: " + model}
+	}
+	st, err := s.repo.GetSettings(ctx)
+	if err != nil {
+		return err
+	}
+	st.CodingModel = model
+	if err := s.repo.SaveSettings(ctx, st); err != nil {
+		return err
+	}
+	s.reviveModel(model)
+	return nil
+}
+
 func (s *Service) modelForNewBuild(sessionModel string) (string, error) {
+	return s.modelForNewBuildCtx(context.Background(), sessionModel)
+}
+
+func (s *Service) modelForNewBuildCtx(ctx context.Context, sessionModel string) (string, error) {
 	signed := pi.SignedProviders(authPath())
 	if s.signedIn != nil {
 		signed = s.signedIn()
 	}
-	candidates := pi.CandidateModels(s.catalog, sessionModel, signed)
+	prefer := s.preferredSessionModel(ctx, sessionModel)
+	candidates := pi.CandidateModels(s.catalog, prefer, signed)
 	if len(candidates) == 0 {
 		return "", ErrValidation{"This model is not signed in."}
 	}
@@ -464,6 +544,16 @@ func (s *Service) models() []ModelOption {
 }
 
 func (s *Service) SendAgentMessage(ctx context.Context, projectID int64, mode, message string) error {
+	return s.SendAgentMessageModel(ctx, projectID, mode, message, "")
+}
+
+// SendAgentMessageModel optionally locks the project (and desk) onto model first.
+func (s *Service) SendAgentMessageModel(ctx context.Context, projectID int64, mode, message, model string) error {
+	if model = strings.TrimSpace(model); model != "" {
+		if err := s.SelectModel(ctx, projectID, model); err != nil {
+			return err
+		}
+	}
 	_, err := s.sendAgentMessage(ctx, projectID, mode, message)
 	return err
 }
@@ -511,7 +601,7 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 	if mode != "plan" {
 		mode = "build"
 	}
-	model, err := s.modelForNewBuild(session.Model)
+	model, err := s.modelForNewBuildCtx(ctx, session.Model)
 	if err != nil {
 		return 0, err
 	}
@@ -563,6 +653,7 @@ func (s *Service) improveURL(ctx context.Context, p Project) string {
 }
 
 func (s *Service) SelectModel(ctx context.Context, projectID int64, model string) error {
+	model = strings.TrimSpace(model)
 	found := false
 	for _, m := range s.catalog.Models {
 		if m.Full == model {
@@ -572,6 +663,10 @@ func (s *Service) SelectModel(ctx context.Context, projectID int64, model string
 	}
 	if !found {
 		return ErrValidation{"Unknown model: " + model}
+	}
+	// Manual pick is authoritative: revive hop memory and set desk-wide preferred.
+	if err := s.SetCodingModel(ctx, model); err != nil {
+		return err
 	}
 	session, err := s.repo.GetSession(ctx, projectID)
 	if err != nil {
@@ -1319,6 +1414,20 @@ func (s *Service) SaveSettings(ctx context.Context, settings Settings) error {
 	}
 	if settings.StyleProfile == "" {
 		settings.StyleProfile = "graphite"
+	}
+	settings.CodingModel = strings.TrimSpace(settings.CodingModel)
+	if settings.CodingModel != "" {
+		found := false
+		for _, m := range s.catalog.Models {
+			if m.Full == settings.CodingModel {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrValidation{"Unknown model: " + settings.CodingModel}
+		}
+		s.reviveModel(settings.CodingModel)
 	}
 	return s.repo.SaveSettings(ctx, settings)
 }

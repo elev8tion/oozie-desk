@@ -146,7 +146,7 @@ func (s *Service) planFromStoreListing(ctx context.Context, listing storeListing
 	if s.signedIn != nil {
 		signed = s.signedIn()
 	}
-	candidates := pi.CandidateModels(s.catalog, "", signed)
+	candidates := pi.CandidateModels(s.catalog, s.preferredSessionModel(ctx, ""), signed)
 	if len(candidates) == 0 {
 		return fallback
 	}

@@ -13,10 +13,12 @@
   <div class="notice">{{$d.Setup}}</div>
   {{end}}
   {{if $d.Flash}}<p class="notice good">{{$d.Flash}}</p>{{end}}
-  <form method="post" action="/make" class="form-stack">
+  <form id="desk-make-form" method="post" action="/make" class="form-stack">
     <label>Tool<textarea name="text" rows="4" required placeholder="A tool that tracks my sourdough feedings">{{$d.Text}}</textarea></label>
+    <div id="desk-model-picker">{{template "partials/desk/model" (dict "Data" (dict "Model" $d.Model "Models" $d.Models "Signed" $d.Signed))}}</div>
     <div class="actions"><button class="button primary">Build and open</button></div>
   </form>
+  <p class="muted">Switch models anytime here or in <a href="/settings">Settings</a>. A manual pick becomes the desk default and clears temporary skips for that provider.</p>
 </section>
 
 {{$insights := $d.Insights}}

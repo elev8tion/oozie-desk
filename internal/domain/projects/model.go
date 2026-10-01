@@ -180,6 +180,9 @@ type Settings struct {
 	StyleProfile string
 	FairyEnabled bool
 	FairyHour    int // local hour (0-23) the night shift starts
+	// CodingModel is the desk-wide preferred provider/model (e.g. xai/grok-4.3).
+	// Empty means the catalog default. Operator can switch anytime in Settings or on the desk.
+	CodingModel string
 }
 
 // A Wish is an app idea waiting for the nightly build fairy.

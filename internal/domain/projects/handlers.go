@@ -46,7 +46,7 @@ func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Make(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	text := r.FormValue("text")
-	id, err := h.service.Make(r.Context(), text)
+	id, err := h.service.MakeWithModel(r.Context(), text, r.FormValue("model"))
 	if err != nil {
 		http.Redirect(w, r, "/?text="+url.QueryEscape(text)+"&err="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
@@ -231,7 +231,7 @@ func (h *Handlers) AgentRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = r.ParseForm()
-	err := h.service.SendAgentMessage(r.Context(), id, r.FormValue("mode"), r.FormValue("message"))
+	err := h.service.SendAgentMessageModel(r.Context(), id, r.FormValue("mode"), r.FormValue("message"), r.FormValue("model"))
 	page, _ := h.service.AgentPage(r.Context(), id)
 	if err != nil {
 		page.Error = err.Error()
@@ -750,7 +750,14 @@ func (h *Handlers) BuildWish(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) Settings(w http.ResponseWriter, r *http.Request) {
 	s, _ := h.service.GetSettings(r.Context())
-	h.page(w, r, "Settings · oozie", "pages/settings/index-content", map[string]any{"Settings": s, "Taste": h.service.LoadTaste()})
+	model, models, signed := h.service.ModelChoices(r.Context())
+	if s.CodingModel == "" {
+		s.CodingModel = model
+	}
+	h.page(w, r, "Settings · oozie", "pages/settings/index-content", map[string]any{
+		"Settings": s, "Taste": h.service.LoadTaste(),
+		"Models": models, "Signed": signed, "Model": model,
+	})
 }
 
 // SaveTaste persists the user's design voice; it flows into every project
@@ -769,9 +776,67 @@ func (h *Handlers) SaveSettings(w http.ResponseWriter, r *http.Request) {
 	if hour < 0 || hour > 23 {
 		hour = 2
 	}
-	s := Settings{Appearance: r.FormValue("appearance"), StyleProfile: r.FormValue("style_profile"), FairyEnabled: r.FormValue("fairy_enabled") == "on", FairyHour: hour}
-	_ = h.service.SaveSettings(r.Context(), s)
-	h.renderer.HTML(w, 200, "partials/settings/form", render.ViewData{Flash: "Settings saved.", Data: map[string]any{"Settings": s}})
+	s := Settings{
+		Appearance:   r.FormValue("appearance"),
+		StyleProfile: r.FormValue("style_profile"),
+		FairyEnabled: r.FormValue("fairy_enabled") == "on",
+		FairyHour:    hour,
+		CodingModel:  r.FormValue("coding_model"),
+	}
+	flash := "Settings saved."
+	if err := h.service.SaveSettings(r.Context(), s); err != nil {
+		flash = err.Error()
+	}
+	_, models, signed := h.service.ModelChoices(r.Context())
+	h.renderer.HTML(w, 200, "partials/settings/form", render.ViewData{Flash: flash, Data: map[string]any{
+		"Settings": s, "Models": models, "Signed": signed, "Model": s.CodingModel,
+	}})
+}
+
+// SaveCodingModel is a one-field switch from the desk or settings without rewriting appearance.
+func (h *Handlers) SaveCodingModel(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	model := r.FormValue("model")
+	if model == "" {
+		model = r.FormValue("coding_model")
+	}
+	flash := "Model set to " + model + "."
+	if err := h.service.SetCodingModel(r.Context(), model); err != nil {
+		flash = err.Error()
+	}
+	if r.FormValue("clear_dead") == "1" || r.FormValue("clear_dead") == "on" {
+		h.service.ClearDeadModels()
+		flash = "Model set. Automatic skips cleared — every signed model can be tried again."
+	}
+	st, _ := h.service.GetSettings(r.Context())
+	cur, models, signed := h.service.ModelChoices(r.Context())
+	if st.CodingModel == "" {
+		st.CodingModel = cur
+	}
+	// Desk form fragment vs settings form.
+	if r.FormValue("surface") == "desk" {
+		h.renderer.HTML(w, 200, "partials/desk/model", render.ViewData{Flash: flash, Data: map[string]any{
+			"Model": cur, "Models": models, "Signed": signed,
+		}})
+		return
+	}
+	h.renderer.HTML(w, 200, "partials/settings/form", render.ViewData{Flash: flash, Data: map[string]any{
+		"Settings": st, "Models": models, "Signed": signed, "Model": cur,
+	}})
+}
+
+// ClearDeadModels forgets temporary hop blacklists so the operator can retry a provider.
+func (h *Handlers) ClearDeadModels(w http.ResponseWriter, r *http.Request) {
+	h.service.ClearDeadModels()
+	st, _ := h.service.GetSettings(r.Context())
+	cur, models, signed := h.service.ModelChoices(r.Context())
+	if st.CodingModel == "" {
+		st.CodingModel = cur
+	}
+	h.renderer.HTML(w, 200, "partials/settings/form", render.ViewData{
+		Flash: "Automatic model skips cleared. Your preferred model is unchanged.",
+		Data:  map[string]any{"Settings": st, "Models": models, "Signed": signed, "Model": cur},
+	})
 }
 
 func (h *Handlers) pathID(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
