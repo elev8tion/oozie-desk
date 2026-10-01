@@ -85,6 +85,8 @@ type Service struct {
 	improveCurrent sync.Map
 	improveRetryN  sync.Map // origin request id → hop count
 	wishRetryN     sync.Map // wish id → hop count
+	// incompleteScaffold marks projects that already got one "finish main.go" nudge.
+	incompleteScaffold sync.Map
 
 	// signedIn is a test hook. Nil reads the pi auth file.
 	signedIn func() map[string]bool

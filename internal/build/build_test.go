@@ -48,8 +48,12 @@ func TestBuildable(t *testing.T) {
 		t.Fatal("empty dir should not be buildable")
 	}
 	writeFile(t, filepath.Join(dir, "go.mod"), "module x\n\ngo 1.24\n")
+	if Buildable(dir) {
+		t.Fatal("go.mod alone should not be buildable")
+	}
+	writeFile(t, filepath.Join(dir, "main.go"), "package main\nfunc main() {}\n")
 	if !Buildable(dir) {
-		t.Fatal("go.mod should be buildable")
+		t.Fatal("go.mod + main.go should be buildable")
 	}
 }
 

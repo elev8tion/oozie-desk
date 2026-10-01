@@ -24,10 +24,23 @@ type GoBuilder struct {
 	Timeout time.Duration // zero means 10 minutes
 }
 
-// Buildable reports whether workdir contains a Go module Publish can compile.
+// Buildable reports whether workdir has a Go module and at least one .go file
+// Publish can compile (go.mod alone is not enough — free models often stop there).
 func Buildable(workdir string) bool {
-	_, err := os.Stat(filepath.Join(workdir, "go.mod"))
-	return err == nil
+	if _, err := os.Stat(filepath.Join(workdir, "go.mod")); err != nil {
+		return false
+	}
+	return hasGoSource(workdir)
+}
+
+func hasGoSource(workdir string) bool {
+	if matches, _ := filepath.Glob(filepath.Join(workdir, "*.go")); len(matches) > 0 {
+		return true
+	}
+	if matches, _ := filepath.Glob(filepath.Join(workdir, "cmd", "*", "*.go")); len(matches) > 0 {
+		return true
+	}
+	return false
 }
 
 func (b GoBuilder) Build(workdir, appName string) (string, error) {

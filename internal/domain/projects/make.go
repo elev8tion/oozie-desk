@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"oozie/internal/agent/pi"
+	"oozie/internal/build"
 )
 
 // MakeView is what the front door shows while a sentence becomes a tool.
@@ -250,8 +251,15 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 	if status != "completed" {
 		return
 	}
+	if s.retryIncompleteScaffold(ctx, projectID, requestID, func(newID int64) {
+		s.makeByRequest.Delete(requestID)
+		s.trackFrontDoor(newID, projectID)
+	}) {
+		return
+	}
 	s.makeByRequest.Delete(requestID)
 	s.makeCreditRetry.Delete(projectID)
+	s.incompleteScaffold.Delete(projectID)
 	if err := s.Publish(ctx, projectID); err != nil {
 		// Publish records its own job failure when the build starts. If it
 		// cannot even start, the waiting screen still needs one sentence.
@@ -259,6 +267,80 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 			_ = s.repo.FinishJob(ctx, jobID, "failed", err.Error(), nil)
 		}
 	}
+}
+
+// incompleteScaffoldNudge is sent when the agent stops after go.mod (or empty tree).
+const incompleteScaffoldNudge = `You stopped before the tool was buildable. Finish now — no questions.
+
+Required at the project root:
+- go.mod (keep or fix)
+- main.go package main that listens on $ADDR (or 127.0.0.1:$PORT) and serves GET / as HTML 200
+- Footer with "Back to desk" (target=_top) using the desk URL from the system prompt
+
+Verify with: go build -o /tmp/oozie-check .
+Do not end the turn until main.go exists and go build succeeds.`
+
+// retryIncompleteScaffold re-prompts when the agent "completed" without a
+// compileable Go app (common on thin free models that only write go.mod).
+// First: same-model nudge. Then: mark that model dead and hop with the
+// original build prompt. onRetry registers the new agent request.
+func (s *Service) retryIncompleteScaffold(ctx context.Context, projectID, requestID int64, onRetry func(newID int64)) bool {
+	project, err := s.repo.GetProject(ctx, projectID)
+	if err != nil {
+		return false
+	}
+	wd, err := resolveWorkdir(project)
+	if err != nil {
+		return false
+	}
+	if build.Buildable(wd) {
+		return false
+	}
+	_, nudged := s.incompleteScaffold.Load(projectID)
+	if !nudged {
+		s.incompleteScaffold.Store(projectID, true)
+		newID, err := s.sendAgentMessage(ctx, projectID, "build", incompleteScaffoldNudge)
+		if err != nil || newID == 0 {
+			s.incompleteScaffold.Delete(projectID)
+			return false
+		}
+		onRetry(newID)
+		log.Printf("project %d: incomplete scaffold after request %d — nudge as request %d", projectID, requestID, newID)
+		return true
+	}
+	// Nudge already used and still no main package — hop models.
+	n := 0
+	if v, ok := s.makeCreditRetry.Load(projectID); ok {
+		n, _ = v.(int)
+	}
+	if n >= maxMakeCreditRetries {
+		return false
+	}
+	if session, err := s.repo.GetSession(ctx, projectID); err == nil && session.Model != "" {
+		if s.deadModels == nil {
+			s.deadModels = map[string]bool{}
+		}
+		s.deadModels[session.Model] = true
+		_ = s.repo.SetSessionModel(ctx, session.ID, "")
+	}
+	msg, _ := s.repo.FirstBuildPrompt(ctx, projectID)
+	if strings.TrimSpace(msg) == "" {
+		msg, _ = s.repo.FirstUserMessage(ctx, requestID)
+	}
+	if strings.TrimSpace(msg) == "" {
+		msg = incompleteScaffoldNudge
+	} else if !strings.Contains(msg, "You stopped before") {
+		msg = msg + "\n\n" + incompleteScaffoldNudge
+	}
+	s.incompleteScaffold.Delete(projectID) // allow one nudge on the next model too
+	s.makeCreditRetry.Store(projectID, n+1)
+	newID, err := s.sendAgentMessage(ctx, projectID, "build", msg)
+	if err != nil || newID == 0 {
+		return false
+	}
+	onRetry(newID)
+	log.Printf("project %d: incomplete scaffold after request %d — model hop as request %d (attempt %d)", projectID, requestID, newID, n+1)
+	return true
 }
 
 // maxMakeCreditRetries is how many times settleMake may hop to the next model

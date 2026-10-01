@@ -81,8 +81,15 @@ func (s *Service) settleWish(projectID, requestID int64, status string) {
 		_ = s.repo.SettleWish(ctx, wishID, "failed", "the agent run ended with status "+status)
 		return
 	}
+	if s.retryIncompleteScaffold(ctx, projectID, requestID, func(newID int64) {
+		s.wishByRequest.Delete(requestID)
+		s.wishByRequest.Store(newID, wishID)
+	}) {
+		return
+	}
 	s.wishByRequest.Delete(requestID)
 	s.wishRetryN.Delete(wishID)
+	s.incompleteScaffold.Delete(projectID)
 	// If the agent finished without leaving anything buildable (it may
 	// have declined the wish), fail with its own words instead of the
 	// misleading "no go.mod" publish error.

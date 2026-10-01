@@ -271,6 +271,23 @@ func (r *Repo) FirstUserMessage(ctx context.Context, requestID int64) (string, e
 	return content, err
 }
 
+// FirstBuildPrompt is the earliest real user build prompt on a project,
+// skipping incomplete-scaffold nudges.
+func (r *Repo) FirstBuildPrompt(ctx context.Context, projectID int64) (string, error) {
+	var content string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT m.content FROM agent_messages m
+		JOIN agent_requests ar ON ar.id = m.request_id
+		JOIN agent_sessions s ON s.id = ar.session_id
+		WHERE s.project_id = ? AND m.role = 'user'
+		  AND m.content NOT LIKE 'You stopped before%'
+		ORDER BY m.id ASC LIMIT 1`, projectID).Scan(&content)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return content, err
+}
+
 func (r *Repo) CompleteRequest(ctx context.Context, id int64, status string) error {
 	// Settle any leftover streaming rows so nothing stays 'loading' forever.
 	_, _ = r.db.ExecContext(ctx, `UPDATE agent_messages SET status='completed' WHERE request_id=? AND status='loading'`, id)

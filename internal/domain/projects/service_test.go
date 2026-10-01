@@ -496,6 +496,7 @@ func TestWishLifecycle(t *testing.T) {
 	grDir := filepath.Join(t.TempDir(), "gr")
 	p, _ := s.CreateProject(ctx, "Granted", grDir, true)
 	writeTestFile(t, filepath.Join(grDir, "go.mod"), "module granted\n\ngo 1.24\n")
+	writeTestFile(t, filepath.Join(grDir, "main.go"), "package main\nfunc main() {}\n")
 	_ = s.repo.SaveDraft(ctx, PublishDraft{ProjectID: p.ID, AppName: "Granted", Headline: "h", Description: "d"})
 	_ = s.AddWish(ctx, "another wish")
 	wishes, _ = s.ListWishes(ctx)
@@ -796,6 +797,7 @@ func TestMakeOpensWhenAgentFinishes(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTestFile(t, filepath.Join(dir, "go.mod"), "module sourdough\n\ngo 1.24\n")
+	writeTestFile(t, filepath.Join(dir, "main.go"), "package main\nfunc main() {}\n")
 	if err := s.repo.SaveDraft(ctx, PublishDraft{ProjectID: p.ID, AppName: "Sourdough", Headline: "h", Description: "track feedings", AutoInstall: true}); err != nil {
 		t.Fatal(err)
 	}
