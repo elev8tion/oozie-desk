@@ -51,7 +51,7 @@ func (s *Service) BuildWish(ctx context.Context, id int64) (int64, error) {
 	if err := s.repo.SaveDraft(ctx, draft); err != nil {
 		return 0, err
 	}
-	msg := pageBuildMessage(wish.Text)
+	msg := wishBuildMessage(wish.Text)
 	requestID, err := s.sendAgentMessage(ctx, project.ID, "build", msg)
 	if err != nil {
 		_ = s.repo.SettleWish(ctx, id, "failed", err.Error())

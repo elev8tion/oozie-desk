@@ -150,14 +150,7 @@ func (s *Service) planFromStoreListing(ctx context.Context, listing storeListing
 	if len(candidates) == 0 {
 		return fallback
 	}
-	system := strings.TrimSpace(`You write build plans for oozie, a local desk that rebuilds store apps as small Go web tools.
-Read the store listing carefully. Produce a concrete natural-language plan the coding agent will follow.
-Rules:
-- Cover the same user job as the listing, simplified for one local tool.
-- Do not invent cloud accounts, store APIs, proprietary code, or binary ports.
-- Prefer one Go web page (stdlib), $ADDR listener, data/ for any saves, Back to desk + Fix footer.
-- Be specific about screens, fields, and flows from the listing — not generic filler.
-- Plain text only. No markdown code fences. Keep under ~400 words.`)
+	system := recipePlanSystem
 	user := fmt.Sprintf(
 		"Store kind: %s\nProduct name: %s\nListing URL: %s\n\nListing text (scraped from the public page):\n%s\n\nWrite the build plan now.",
 		sourceKindLabel(listing.Kind), listing.Name, listing.URL, listing.Description,
@@ -301,21 +294,7 @@ func (s *Service) importRecipeJSON(ctx context.Context, raw string) (Project, er
 			_ = os.WriteFile(filepath.Join(workdir, "icon.png"), icon, 0o644)
 		}
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "Rebuild this app from its recipe. It was grown elsewhere through the prompts below; recreate it here as a working local web app.\n\nApp: %s", rec.Name)
-	if rec.Headline != "" {
-		fmt.Fprintf(&b, " — %s", rec.Headline)
-	}
-	if rec.Description != "" {
-		fmt.Fprintf(&b, "\n\nDescription: %s", rec.Description)
-	}
-	b.WriteString("\n\nThe prompts that shaped it, in order:\n")
-	for i, p := range rec.Prompts {
-		fmt.Fprintf(&b, "\n%d. %s\n", i+1, p)
-	}
-	b.WriteString("\nSynthesize these into one coherent app (later prompts refine earlier ones — don't replay them literally if they conflict).")
-	b.WriteString("\n\nData isolation: this is a fresh desk. Start with empty local storage. Put any durable records under a data/ directory in the project root (create it on first write). Do not invent or hardcode the original author's personal records, sample rows that look like real usage, or anything that could have come from their database. Each desk owns its own data/.")
-	b.WriteString("\nVerify with 'go build -o /tmp/app .' and keep the server listening on $ADDR.")
+	b := recipeBuildMessage(rec.Name, rec.Headline, rec.Description, rec.Prompts)
 	headline := strings.TrimSpace(rec.Headline)
 	if headline == "" {
 		headline = rec.Name
@@ -334,7 +313,7 @@ func (s *Service) importRecipeJSON(ctx context.Context, raw string) (Project, er
 	if err := s.repo.SaveDraft(ctx, draft); err != nil {
 		return project, err
 	}
-	requestID, err := s.sendAgentMessage(ctx, project.ID, "build", b.String())
+	requestID, err := s.sendAgentMessage(ctx, project.ID, "build", b)
 	if err != nil {
 		// Leave a failed request so /make does not spin on "Starting." forever.
 		s.recordFailedStart(ctx, project.ID, err.Error())

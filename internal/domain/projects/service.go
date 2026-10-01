@@ -630,7 +630,7 @@ func (s *Service) sendAgentMessage(ctx context.Context, projectID int64, mode, m
 		Workdir:      workdir,
 		Model:        model,
 		PiSessionID:  session.PiSessionID,
-		SystemPrompt: oozieSystemPrompt(project, workdir, s.baseURL, s.improveURL(ctx, project), s.repo.IndustryPack(ctx)),
+		SystemPrompt: oozieSystemPrompt(project, workdir, s.baseURL, s.improveURL(ctx, project), s.repo.IndustryPack(ctx), s.LoadTaste()),
 		Trusted:      project.Trusted,
 	}
 	if err := s.agent.Prompt(opts, requestID, wrapModeMessage(mode, message)); err != nil {
@@ -900,7 +900,7 @@ func (s *Service) RemixApp(ctx context.Context, appID int64, mutation string) (P
 	if err := s.repo.SaveDraft(ctx, draft); err != nil {
 		return remix, err
 	}
-	msg := fmt.Sprintf("This project is a remix of %q — its source was copied here as the starting point (runtime data/ and databases were left behind so this desk starts empty).\n\nMutation requested by the user:\n\n%s\n\nApply the mutation: rename the tool appropriately (module path, page title, and any user-visible names), implement the change, keep what still serves the new purpose, delete what doesn't, and verify with 'go build -o /tmp/remix .'. Keep durable records under data/ only. The tool must keep listening on $ADDR.", app.Name, mutation)
+	msg := remixMessage(app.Name, mutation)
 	requestID, err := s.sendAgentMessage(ctx, remix.ID, "build", msg)
 	if err != nil {
 		s.recordFailedStart(ctx, remix.ID, err.Error())
@@ -989,7 +989,7 @@ func (s *Service) FileImprovement(ctx context.Context, slug, text string) (int64
 	if app.ProjectID == nil {
 		return 0, ErrValidation{"This tool has no linked project, so the agent can't work on it."}
 	}
-	msg := fmt.Sprintf("[improvement request filed from the running tool %q]\n\nThe user asked for this improvement:\n\n%s\n\nImplement it in this project, keep everything else working, and verify with 'go build -o /tmp/app .'. The server must still listen on $ADDR and serve GET /. oozie republishes and restarts the tool automatically when you finish.", app.Name, text)
+	msg := improvementMessage(app.Name, text)
 	requestID, err := s.sendAgentMessage(ctx, *app.ProjectID, "build", msg)
 	if err != nil {
 		return 0, err
@@ -1097,31 +1097,35 @@ func newPiSessionID(projectID int64) string {
 	return fmt.Sprintf("oozie-p%d-%s", projectID, hex.EncodeToString(buf))
 }
 
-func oozieSystemPrompt(p Project, workdir, deskURL, improveURL, industryPack string) string {
+func oozieSystemPrompt(p Project, workdir, deskURL, improveURL, industryPack, taste string) string {
 	prompt := fmt.Sprintf(`You are running inside oozie, a local desk whose purpose is building small personal tools, as the agent for the project %q (working directory: %s).
 
 How to behave in oozie:
 - Requests arrive in one of two modes, stated at the top of each message.
 - PLAN mode: produce a concise, numbered implementation plan. Do not create, modify, or delete any files. End by asking whether to proceed.
-- BUILD mode: implement the request directly in the working directory, verifying your work as you go (build/tests where applicable).
+- BUILD mode: implement the request directly. The user's job comes first. A compiling stub is a failure.
 - Your responses are rendered in a compact web timeline; keep them focused and skip decorative preamble.
-- The user approves questions and permission dialogs through the oozie side panel; when you ask via a dialog, wait for that response.
+- The user approves questions and permission dialogs through the oozie side panel; when you ask via a dialog, wait for that response. On front-door builds, do not ask — pick defaults.
 
 Producing web apps (oozie's publish pipeline):
-- When the user asks for an app, scaffold a Go module at the project root: go.mod plus a main package in main.go (or cmd/app). Prefer the standard library.
-- The server MUST listen on the ADDR environment variable (host:port, for example 127.0.0.1:8091). If ADDR is empty, listen on 127.0.0.1:$PORT. Do not hardcode a port.
-- GET / must return HTML with status 200.
-- Data isolation: if the app needs storage, keep durable user records only under a data/ directory in the working directory (create it on first write). Prefer SQLite there (modernc.org/sqlite needs no C compiler). Prefer $OOZIE_DATA_DIR when set — it points at that data/ folder. Never hardcode personal records, real usage rows, API keys, or another person's data into source files. A share sends the recipe only; data/ stays on this desk.
-- Every page MUST include a footer link labeled "Back to desk" to %q (also available as $OOZIE_DESK_URL at runtime), with target="_top" so it escapes any desk iframe shell. The user always needs a way back to the desk from the tool — do not omit this.
-- Also put a footer link "Improve this app" (or "Fix") to %q when that URL is non-empty. That page files a request back to you. Do not build any other feedback system.
-- If OOZIE_BEACON_URL is set, a page view may GET it (failure is fine). It records that the app was opened.
-- Verify with 'go build -o /tmp/app .' before declaring the work done. oozie then builds the same way and opens the page. No Swift, no Xcode, no .app bundle, no icon, no screenshot pass.
+- Scaffold a Go module at the project root: go.mod plus main.go. Prefer the standard library. Add a dependency only when the tool cannot work without it.
+- The server MUST listen on the ADDR environment variable (host:port). If ADDR is empty, listen on 127.0.0.1:$PORT. Do not hardcode a port.
+- GET / must return HTML with status 200 that does the user's job.
+- Data isolation: durable user records only under data/ (or $OOZIE_DATA_DIR). Prefer SQLite there (modernc.org/sqlite). Never hardcode personal records, real usage rows, or API keys into source. A share sends the recipe only; data/ stays on this desk.
+- Every page MUST include a footer link labeled "Back to desk" to %q (also $OOZIE_DESK_URL), with target="_top".
+- Also put a footer link "Fix" to %q when that URL is non-empty. Do not build any other feedback system.
+- If OOZIE_BEACON_URL is set, a page view may GET it (failure is fine).
+- Verify with 'go build -o /tmp/app .' before declaring the work done. No Swift, no Xcode, no .app bundle.
 
-Design:
-- Build one local tool as a single page, not a suite. The page itself is the preview.
-- The project root contains TASTE.md — the user's personal design voice. Read it before any UI work; its rules override DESIGN.md wherever they conflict.
-- The project root contains DESIGN.md — read it before any UI work and follow it.
-`, p.Name, workdir, deskURL, improveURL)
+%s
+
+%s
+`, p.Name, workdir, deskURL, improveURL, qualityBar, uiSkeleton)
+	if rules := tasteRules(taste); rules != "" {
+		prompt += "\nUser taste — these override the generic design:\n" + rules + "\n"
+	} else {
+		prompt += "\nNo personal taste rules yet. Follow the quality bar above. DESIGN.md in the project root is the generic standard; read it if you need the long form.\n"
+	}
 	if strings.TrimSpace(industryPack) != "" {
 		prompt += "\nIndustry pack " + strings.TrimSpace(industryPack) + ":\nFollow that pack's terms when they do not conflict with the contract above. The pack does not change who can connect or where the tool runs.\n"
 	}

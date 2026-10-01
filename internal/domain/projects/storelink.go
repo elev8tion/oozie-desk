@@ -48,15 +48,15 @@ var storeHTTPClient = &http.Client{
 }
 
 var (
-	reMetaProperty = regexp.MustCompile(`(?is)<meta[^>]+property=["']([^"']+)["'][^>]+content=["']([^"']*)["'][^>]*>`)
+	reMetaProperty  = regexp.MustCompile(`(?is)<meta[^>]+property=["']([^"']+)["'][^>]+content=["']([^"']*)["'][^>]*>`)
 	reMetaProperty2 = regexp.MustCompile(`(?is)<meta[^>]+content=["']([^"']*)["'][^>]+property=["']([^"']+)["'][^>]*>`)
-	reMetaName     = regexp.MustCompile(`(?is)<meta[^>]+name=["']([^"']+)["'][^>]+content=["']([^"']*)["'][^>]*>`)
-	reMetaName2    = regexp.MustCompile(`(?is)<meta[^>]+content=["']([^"']*)["'][^>]+name=["']([^"']+)["'][^>]*>`)
-	reTitle        = regexp.MustCompile(`(?is)<title[^>]*>([^<]+)</title>`)
-	reScripts      = regexp.MustCompile(`(?is)<script\b[^>]*>[\s\S]*?</script>`)
-	reStyles       = regexp.MustCompile(`(?is)<style\b[^>]*>[\s\S]*?</style>`)
-	reTags         = regexp.MustCompile(`(?s)<[^>]+>`)
-	reSpace        = regexp.MustCompile(`\s+`)
+	reMetaName      = regexp.MustCompile(`(?is)<meta[^>]+name=["']([^"']+)["'][^>]+content=["']([^"']*)["'][^>]*>`)
+	reMetaName2     = regexp.MustCompile(`(?is)<meta[^>]+content=["']([^"']*)["'][^>]+name=["']([^"']+)["'][^>]*>`)
+	reTitle         = regexp.MustCompile(`(?is)<title[^>]*>([^<]+)</title>`)
+	reScripts       = regexp.MustCompile(`(?is)<script\b[^>]*>[\s\S]*?</script>`)
+	reStyles        = regexp.MustCompile(`(?is)<style\b[^>]*>[\s\S]*?</style>`)
+	reTags          = regexp.MustCompile(`(?s)<[^>]+>`)
+	reSpace         = regexp.MustCompile(`\s+`)
 )
 
 // classifyStoreURL accepts only Chrome Web Store, Apple App Store, and
@@ -434,19 +434,20 @@ func synthesizePlan(listing storeListing) string {
 		source = "a Google Play Store listing"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Rebuild **%s** as a small local web tool on this desk, matching the job described on %s.\n\n", listing.Name, source)
+	fmt.Fprintf(&b, "Rebuild %s as a small local web tool on this desk, matching the job described on %s.\n\n", listing.Name, source)
 	fmt.Fprintf(&b, "Source listing (public page only — not private usage data):\n%s\n\n", listing.URL)
-	b.WriteString("What the store says it does (use this as the product brief):\n")
+	b.WriteString("What the store says it does:\n")
 	b.WriteString(listing.Description)
-	b.WriteString("\n\n")
-	b.WriteString("Build goals derived from that brief:\n")
+	b.WriteString("\n\nJob:\n")
+	fmt.Fprintf(&b, "Do the same core job as %s, locally, with no store account.\n", listing.Name)
+	b.WriteString("Screens:\nOne main screen for that job. Add a second screen only if the listing describes a separate detail or history view.\n")
+	b.WriteString("Fields:\n")
 	for _, bullet := range planBulletsFromDescription(listing.Description) {
 		fmt.Fprintf(&b, "- %s\n", bullet)
 	}
-	b.WriteString("- Single local Go web page; no accounts, no original store/APIs, no proprietary code copy.\n")
-	b.WriteString("- Any saved user data only under data/ on this desk.\n")
-	b.WriteString("- Footer: Back to desk and Fix. Verify with `go build`; listen on $ADDR.\n\n")
-	b.WriteString("Fresh tool inspired by the listing's purpose — not a binary or data import from the original app.")
+	b.WriteString("Saved:\nAnything the user types, under data/ on this desk. Start empty. No imported store data.\n")
+	b.WriteString("Done when:\nGET / shows the job from the listing (not a brochure), the fields above work, and go build succeeds. Listen on $ADDR. Footer: Back to desk and Fix.\n")
+	b.WriteString("Flow:\nOpen the tool, do the job the listing describes, see the result on the page.\n")
 	return b.String()
 }
 

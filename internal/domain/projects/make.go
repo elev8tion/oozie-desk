@@ -287,21 +287,11 @@ func (s *Service) settleMake(projectID, requestID int64, status string) {
 	}
 }
 
-// incompleteScaffoldNudge is sent when the agent stops after go.mod (or empty tree).
-const incompleteScaffoldNudge = `You stopped before the tool was buildable. Finish now — no questions.
-
-Required at the project root:
-- go.mod (keep or fix)
-- main.go package main that listens on $ADDR (or 127.0.0.1:$PORT) and serves GET / as HTML 200
-- Footer with "Back to desk" (target=_top) using the desk URL from the system prompt
-
-Verify with: go build -o /tmp/oozie-check .
-Do not end the turn until main.go exists and go build succeeds.`
-
 // retryIncompleteScaffold re-prompts when the agent "completed" without a
 // compileable Go app (common on thin free models that only write go.mod).
-// First: same-model nudge. Then: mark that model dead and hop with the
-// original build prompt. onRetry registers the new agent request.
+// First: same-model nudge that repeats the original job. Then: mark that
+// model dead and hop with the original build prompt. onRetry registers the
+// new agent request.
 func (s *Service) retryIncompleteScaffold(ctx context.Context, projectID, requestID int64, onRetry func(newID int64)) bool {
 	project, err := s.repo.GetProject(ctx, projectID)
 	if err != nil {
@@ -315,9 +305,13 @@ func (s *Service) retryIncompleteScaffold(ctx context.Context, projectID, reques
 		return false
 	}
 	_, nudged := s.incompleteScaffold.Load(projectID)
+	original, _ := s.repo.FirstBuildPrompt(ctx, projectID)
+	if strings.TrimSpace(original) == "" {
+		original, _ = s.repo.FirstUserMessage(ctx, requestID)
+	}
 	if !nudged {
 		s.incompleteScaffold.Store(projectID, true)
-		newID, err := s.sendAgentMessage(ctx, projectID, "build", incompleteScaffoldNudge)
+		newID, err := s.sendAgentMessage(ctx, projectID, "build", incompleteScaffoldNudge(original))
 		if err != nil || newID == 0 {
 			s.incompleteScaffold.Delete(projectID)
 			return false
@@ -346,9 +340,9 @@ func (s *Service) retryIncompleteScaffold(ctx context.Context, projectID, reques
 		msg, _ = s.repo.FirstUserMessage(ctx, requestID)
 	}
 	if strings.TrimSpace(msg) == "" {
-		msg = incompleteScaffoldNudge
+		msg = incompleteScaffoldNudge(original)
 	} else if !strings.Contains(msg, "You stopped before") {
-		msg = msg + "\n\n" + incompleteScaffoldNudge
+		msg = msg + "\n\n" + incompleteScaffoldNudge(original)
 	}
 	s.incompleteScaffold.Delete(projectID) // allow one nudge on the next model too
 	s.makeCreditRetry.Store(projectID, n+1)
@@ -402,24 +396,6 @@ func (s *Service) retryMakeAfterCredit(ctx context.Context, projectID, requestID
 	s.trackFrontDoor(newID, projectID)
 	log.Printf("make project %d: model refusal on request %d — retrying as request %d (attempt %d)", projectID, requestID, newID, n+1)
 	return true
-}
-
-func pageBuildMessage(text string) string {
-	return fmt.Sprintf(`Build one small local tool as a single web page for this request. Do not ask questions — pick sensible defaults.
-
-Contract:
-- Go module at the project root (go.mod and main.go). Prefer the standard library.
-- Listen on the ADDR environment variable. If ADDR is empty, listen on 127.0.0.1:$PORT. Never hardcode a port.
-- GET / returns HTML with status 200.
-- If the tool stores anything the user enters, keep it under data/ (or $OOZIE_DATA_DIR). Never bake personal records into source. Each desk keeps its own data when the recipe is shared.
-- Every page has a footer with a "Back to desk" link (target="_top") to the desk URL from the system prompt (or $OOZIE_DESK_URL). The user must always be able to return to the desk from the tool.
-- Also put a footer link labeled "Fix" to the improve URL from the system prompt, when that URL is non-empty.
-- No icon, no screenshot, no visual-review pass. The page itself is the preview.
-- Verify with: go build -o /tmp/app .
-
-Request:
-
-%s`, text)
 }
 
 func buildProgress(role, status, content string) string {
