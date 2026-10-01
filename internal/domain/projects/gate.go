@@ -30,10 +30,12 @@ func (s *Service) acceptPage(ctx context.Context, projectID int64, request strin
 	if err != nil {
 		return true, false
 	}
+	request = s.checkedJob(ctx, projectID, request)
 	ok, reason, snippet := s.pageProbe(wd, request)
 	_ = s.repo.SaveOutcome(ctx, projectID, ok, reason)
 	if ok {
 		s.outcomeRetried.Delete(projectID)
+		s.outcomeMiss.Delete(projectID)
 		return true, false
 	}
 	if onRetry != nil && s.retryOutcome(ctx, projectID, request, reason, snippet, onRetry) {
@@ -54,9 +56,22 @@ func (s *Service) retryOutcome(ctx context.Context, projectID int64, request, re
 		s.outcomeRetried.Delete(projectID)
 		return false
 	}
+	if strings.TrimSpace(reason) == "" {
+		reason = "GET / does not show the job."
+	}
+	s.outcomeMiss.Store(projectID, strings.TrimSpace(reason))
 	onRetry(newID)
 	log.Printf("project %d: job-fit miss — one repair as request %d", projectID, newID)
 	return true
+}
+
+func (s *Service) outcomeMissText(projectID int64) string {
+	v, ok := s.outcomeMiss.Load(projectID)
+	if !ok {
+		return ""
+	}
+	msg, _ := v.(string)
+	return strings.TrimSpace(msg)
 }
 
 func outcomeRepairMessage(request, reason, snippet string) string {
@@ -82,14 +97,78 @@ func (s *Service) noteOutcomeStop(ctx context.Context, projectID int64, reason, 
 	log.Printf("project %d: job-fit failed: %s", projectID, reason)
 }
 
+// jobText is the user's job, never the agent wrapper stored as the first prompt.
+// Make and wish use the desk sentence. Recipe uses the draft name, headline,
+// and description. Remix uses the mutation (draft description).
 func (s *Service) jobText(ctx context.Context, projectID, requestID int64) string {
-	if text, err := s.repo.FirstBuildPrompt(ctx, projectID); err == nil && strings.TrimSpace(text) != "" {
-		return text
+	if v, ok := s.wishByRequest.Load(requestID); ok {
+		if wish, err := s.repo.GetWish(ctx, v.(int64)); err == nil && strings.TrimSpace(wish.Text) != "" {
+			return strings.TrimSpace(wish.Text)
+		}
 	}
-	if text, err := s.repo.FirstUserMessage(ctx, requestID); err == nil {
-		return text
+	draft, err := s.repo.GetDraft(ctx, projectID)
+	if err != nil {
+		return ""
 	}
-	return ""
+	return draftUserJob(draft)
+}
+
+// checkedJob drops agent wrappers so JudgePage never sees recipeBuildMessage,
+// remixMessage, or pageBuildMessage.
+func (s *Service) checkedJob(ctx context.Context, projectID int64, request string) string {
+	request = strings.TrimSpace(request)
+	if request != "" && !agentWrapper(request) {
+		return request
+	}
+	if job := s.jobText(ctx, projectID, 0); job != "" {
+		return job
+	}
+	return request
+}
+
+func agentWrapper(s string) bool {
+	s = strings.TrimSpace(s)
+	return strings.HasPrefix(s, "Build this tool.") ||
+		strings.HasPrefix(s, "Rebuild this tool from its recipe.") ||
+		strings.HasPrefix(s, "This project is a remix of") ||
+		strings.HasPrefix(s, "[improvement request filed")
+}
+
+func draftUserJob(d PublishDraft) string {
+	name := strings.TrimSpace(d.AppName)
+	headline := strings.TrimSpace(d.Headline)
+	desc := strings.TrimSpace(d.Description)
+	if strings.HasSuffix(name, " Remix") {
+		return desc
+	}
+	if desc != "" && deskSentenceDraft(name, headline, desc) {
+		return desc
+	}
+	return joinJob(name, headline, desc)
+}
+
+// deskSentenceDraft is a Make or wish draft: the description is the sentence
+// the user typed, and the name and headline were derived from it.
+func deskSentenceDraft(name, headline, desc string) bool {
+	wantName := wishProjectName(desc)
+	if strings.HasPrefix(wantName, "Wish ") {
+		wantName = "Tool " + wantName[len("Wish "):]
+	}
+	return name == wantName && headline == wishHeadline(desc)
+}
+
+func joinJob(parts ...string) string {
+	var out []string
+	seen := map[string]bool{}
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return strings.Join(out, "\n")
 }
 
 func (s *Service) restoreFrontDoor(ctx context.Context) {

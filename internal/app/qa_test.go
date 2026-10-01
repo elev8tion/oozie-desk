@@ -177,7 +177,7 @@ func main() {
 		addr = "127.0.0.1:" + os.Getenv("PORT")
 	}
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "qa-ok")
+		fmt.Fprint(w, "<html><body><h1>qa-ok</h1><p>A throwaway page for the factory.</p></body></html>")
 	})
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		panic(err)

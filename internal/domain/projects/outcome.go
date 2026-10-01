@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,8 @@ import (
 
 	"oozie-desk/internal/build"
 )
+
+const oozieProbeRow = "oozie-probe-row"
 
 // JudgePage reports whether HTML does the user's job. A compiling page is
 // not enough: the body must show a noun from the request, not only footer links.
@@ -31,10 +35,18 @@ func JudgePage(request, html string) (bool, string) {
 		return true, ""
 	}
 	low := strings.ToLower(stripped)
+	var hit int
 	for _, n := range nouns {
 		if strings.Contains(low, n) {
-			return true, ""
+			hit++
 		}
+	}
+	need := 1
+	if len(nouns) >= 2 {
+		need = 2
+	}
+	if hit >= need {
+		return true, ""
 	}
 	return false, "GET / does not show the job (" + strings.Join(nouns, ", ") + ")."
 }
@@ -68,6 +80,9 @@ func requestNouns(request string) []string {
 		"page": true, "want": true, "need": true, "make": true, "build": true, "should": true,
 		"have": true, "into": true, "and": true, "the": true, "for": true, "app": true,
 		"apps": true, "when": true, "then": true, "just": true, "like": true, "user": true,
+		"rebuild": true, "recipe": true, "prompts": true, "below": true, "spec": true,
+		"implement": true, "project": true, "remix": true, "quality": true, "scope": true,
+		"desk": true, "contract": true,
 	}
 	var out []string
 	seen := map[string]bool{}
@@ -119,7 +134,8 @@ func ProbeBinary(ctx context.Context, bin, workdir, request string) (ok bool, re
 			_ = cmd.Process.Kill()
 		}
 	}()
-	client := &http.Client{Timeout: 3 * time.Second}
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Timeout: 3 * time.Second, Jar: jar, CheckRedirect: localRedirect}
 	var body string
 	var last error
 	deadline := time.Now().Add(8 * time.Second)
@@ -149,7 +165,138 @@ func ProbeBinary(ctx context.Context, bin, workdir, request string) (ok bool, re
 	if !ok {
 		return false, reason, clip(visibleText(body), 180)
 	}
+	if hasTextInput(body) {
+		if err := postProbeRow(client, addr, body); err != nil {
+			return false, "The form did not accept a row.", clip(visibleText(body), 180)
+		}
+		res, err := client.Get("http://" + addr + "/")
+		if err != nil {
+			return false, "The form did not keep the row.", clip(visibleText(body), 180)
+		}
+		raw, _ := io.ReadAll(io.LimitReader(res.Body, 32_000))
+		res.Body.Close()
+		body = string(raw)
+		if res.StatusCode != http.StatusOK || !strings.Contains(body, oozieProbeRow) {
+			return false, "GET / did not show the saved row (" + oozieProbeRow + ").", clip(visibleText(body), 180)
+		}
+	}
 	return true, "", clip(visibleText(body), 180)
+}
+
+func localRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 4 {
+		return http.ErrUseLastResponse
+	}
+	host := req.URL.Hostname()
+	if host != "127.0.0.1" && host != "localhost" && host != "" {
+		return http.ErrUseLastResponse
+	}
+	return nil
+}
+
+func hasTextInput(html string) bool {
+	return len(textInputFields(html)) > 0
+}
+
+func textInputFields(html string) []string {
+	tagRe := regexp.MustCompile(`(?is)<(input|textarea)\b([^>]*)>`)
+	var names []string
+	seen := map[string]bool{}
+	for _, m := range tagRe.FindAllStringSubmatch(html, -1) {
+		kind := strings.ToLower(m[1])
+		if kind == "input" && !inputIsText(m[2]) {
+			continue
+		}
+		name := attrValue(m[2], "name")
+		if name == "" {
+			name = oozieProbeRow
+		}
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	return names
+}
+
+func inputIsText(attrs string) bool {
+	switch strings.ToLower(attrValue(attrs, "type")) {
+	case "", "text", "search", "email", "url", "tel":
+		return true
+	default:
+		return false
+	}
+}
+
+func attrValue(attrs, name string) string {
+	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(name) + `\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))`)
+	m := re.FindStringSubmatch(attrs)
+	if m == nil {
+		return ""
+	}
+	for _, g := range m[2:] {
+		if g != "" {
+			return g
+		}
+	}
+	return ""
+}
+
+// postProbeRow POSTs oozie-probe-row to the local form only. External actions are ignored.
+func postProbeRow(client *http.Client, addr, html string) error {
+	fields := url.Values{}
+	for _, name := range textInputFields(html) {
+		fields.Set(name, oozieProbeRow)
+	}
+	action := "http://" + addr + "/"
+	if form := regexp.MustCompile(`(?is)<form\b([^>]*)>`).FindStringSubmatch(html); form != nil {
+		if act := attrValue(form[1], "action"); act != "" && !remoteAction(act) {
+			action = resolveLocalAction(addr, act)
+		}
+	}
+	res, err := client.PostForm(action, fields)
+	if err != nil {
+		return err
+	}
+	io.Copy(io.Discard, io.LimitReader(res.Body, 32_000))
+	res.Body.Close()
+	if res.StatusCode >= 400 {
+		return fmtProbe(res.Status)
+	}
+	return nil
+}
+
+func fmtProbe(status string) error {
+	return &probeError{status}
+}
+
+type probeError struct{ status string }
+
+func (e *probeError) Error() string { return e.status }
+
+func remoteAction(act string) bool {
+	u, err := url.Parse(act)
+	if err != nil {
+		return true
+	}
+	if u.Host == "" {
+		return false
+	}
+	host := u.Hostname()
+	return host != "127.0.0.1" && host != "localhost"
+}
+
+func resolveLocalAction(addr, act string) string {
+	base, err := url.Parse("http://" + addr + "/")
+	if err != nil {
+		return "http://" + addr + "/"
+	}
+	ref, err := url.Parse(act)
+	if err != nil || remoteAction(act) {
+		return base.String()
+	}
+	return base.ResolveReference(ref).String()
 }
 
 func oneLine(s string) string {

@@ -167,19 +167,40 @@ func (s *Service) MakeStatus(ctx context.Context, projectID int64) (MakeView, er
 		return view, nil
 	}
 	view.Line = "Starting."
+	if miss := s.outcomeMissText(projectID); miss != "" {
+		view.Error = miss
+	}
 	if jobErr == nil && (job.Status == "queued" || job.Status == "running") {
 		view.Line = "Starting the tool."
-		return view, nil
+		return s.paintBuildMiss(projectID, view), nil
 	}
 	if perm, err := s.repo.PendingPermission(ctx, projectID); err == nil && perm != nil {
 		view.Permission = perm
 		view.Line = "Waiting for permission: " + perm.PermissionName
-		return view, nil
+		return s.paintBuildMiss(projectID, view), nil
 	}
 	if role, toolStatus, content, err := s.repo.LatestActivity(ctx, projectID); err == nil {
 		view.Line = buildProgress(role, toolStatus, content)
 	}
-	return view, nil
+	return s.paintBuildMiss(projectID, view), nil
+}
+
+// paintBuildMiss shows the job-fit miss while the one repair is still running.
+// Phase stays building; the sentence is on Error so the wait screen can show it
+// before a second failure.
+func (s *Service) paintBuildMiss(projectID int64, view MakeView) MakeView {
+	if view.Phase != "building" {
+		return view
+	}
+	miss := s.outcomeMissText(projectID)
+	if miss == "" {
+		return view
+	}
+	view.Error = miss
+	if view.Line == "" || view.Line == "Starting." || view.Line == "Starting the tool." {
+		view.Line = miss
+	}
+	return view
 }
 
 // ImproveStatus reports Fix progress for a filed improve request.
@@ -225,7 +246,7 @@ func (s *Service) ImproveStatus(ctx context.Context, requestID int64) (ImproveVi
 		return view, nil
 	case "publishing":
 		view.Line = "Starting the tool."
-		return view, nil
+		return s.paintImproveMiss(app.ProjectID, view), nil
 	}
 	if status, msg, err := s.repo.RequestStatus(ctx, liveRequestID); err == nil {
 		if status == "failed" || status == "cancelled" {
@@ -233,7 +254,7 @@ func (s *Service) ImproveStatus(ctx context.Context, requestID int64) (ImproveVi
 			// when improve itself is marked failed.
 			if _, still := s.improveCurrent.Load(requestID); still && liveRequestID != requestID {
 				view.Line = "Trying another model."
-				return view, nil
+				return s.paintImproveMiss(app.ProjectID, view), nil
 			}
 			view.Phase = "failed"
 			view.Error = plainPageError(msg)
@@ -248,7 +269,22 @@ func (s *Service) ImproveStatus(ctx context.Context, requestID int64) (ImproveVi
 			view.Line = buildProgress(role, toolStatus, content)
 		}
 	}
-	return view, nil
+	return s.paintImproveMiss(app.ProjectID, view), nil
+}
+
+func (s *Service) paintImproveMiss(projectID *int64, view ImproveView) ImproveView {
+	if view.Phase != "building" || projectID == nil {
+		return view
+	}
+	miss := s.outcomeMissText(*projectID)
+	if miss == "" {
+		return view
+	}
+	view.Error = miss
+	if view.Line == "" || view.Line == "Starting the fix." || view.Line == "Starting the tool." {
+		view.Line = miss
+	}
+	return view
 }
 
 // settleMake publishes a front-door build once the agent finishes. The job

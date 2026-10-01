@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -239,4 +240,96 @@ func newTestApp(t *testing.T) *App {
 	a := New(Config{}, database, renderer, staticFS)
 	t.Cleanup(func() { a.service.WaitForJobs(); a.Shutdown(); database.Close() })
 	return a
+}
+
+func TestCancelBackupExportAndKeySaveAreHandled(t *testing.T) {
+	auth := filepath.Join(t.TempDir(), "auth.json")
+	t.Setenv("OOZIE_AUTH_PATH", auth)
+	application := newTestApp(t)
+	handler := application.Routes()
+	ctx := t.Context()
+
+	dir := t.TempDir()
+	p, err := application.service.CreateProject(ctx, "Cancel Me", dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/make/"+strconv.FormatInt(p.ID, 10)+"/cancel", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code == http.StatusInternalServerError {
+		t.Fatalf("cancel = 500: %s", rec.Body.String())
+	}
+	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "/make/") {
+		t.Fatalf("cancel = %d loc=%s", rec.Code, rec.Header().Get("Location"))
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/settings/backup", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code == http.StatusInternalServerError {
+		t.Fatalf("backup = 500: %s", rec.Body.String())
+	}
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Disposition"), "oozie-desk-backup.db") || rec.Body.Len() == 0 {
+		t.Fatalf("backup = %d disp=%s bytes=%d body=%s", rec.Code, rec.Header().Get("Content-Disposition"), rec.Body.Len(), rec.Body.String())
+	}
+
+	form := strings.NewReader("provider=openrouter&key=sk-test-desk")
+	req = httptest.NewRequest(http.MethodPost, "/settings/key", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code == http.StatusInternalServerError {
+		t.Fatalf("key save = 500: %s", rec.Body.String())
+	}
+	loc := rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther || !strings.Contains(loc, "flash=") {
+		t.Fatalf("key save = %d loc=%s", rec.Code, loc)
+	}
+	saved, err := os.ReadFile(auth)
+	if err != nil || !strings.Contains(string(saved), "sk-test-desk") {
+		t.Fatalf("key file: %v %s", err, saved)
+	}
+	form = strings.NewReader("provider=nope&key=x")
+	req = httptest.NewRequest(http.MethodPost, "/settings/key", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code == http.StatusInternalServerError || rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "err=") {
+		t.Fatalf("bad key = %d loc=%s", rec.Code, rec.Header().Get("Location"))
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/store/apps/999/data", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code == http.StatusInternalServerError {
+		t.Fatalf("missing export = 500: %s", rec.Body.String())
+	}
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("missing export = %d, want 422", rec.Code)
+	}
+
+	if _, err := application.database.Exec(`INSERT INTO store_apps (project_id, name, headline, description, visibility, bundle_slug) VALUES (?, 'Cancel Me', 'headline', 'description', 'unlisted', 'cancel-me')`, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	var appID int64
+	if err := application.database.QueryRow(`SELECT id FROM store_apps WHERE project_id=?`, p.ID).Scan(&appID); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "data", "row.txt"), []byte("saved"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/store/apps/"+strconv.FormatInt(appID, 10)+"/data", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code == http.StatusInternalServerError {
+		t.Fatalf("export = 500: %s", rec.Body.String())
+	}
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/zip" || !strings.HasPrefix(rec.Body.String(), "PK") {
+		t.Fatalf("export = %d type=%s body=%q", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String()[:min(80, rec.Body.Len())])
+	}
 }

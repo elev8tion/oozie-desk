@@ -82,3 +82,15 @@ TestPromptMessagesKeepHistory PASS
 TestBashStaysInTheProject PASS
 TestBuildPromptsIncludeScopeLimit PASS
 ```
+
+## 10. Gate repair (not a browser pass)
+Written after the docs agent timed out twice with no report. Proof is `go test`, not a clicked recipe.
+- [x] Job check uses the draft, wish, mutation, or fix note, not the agent wrapper — `TestCheckedJobDropsAgentWrappers`, `TestAcceptPageJudgesTheJobNotTheWrapper`
+- [x] Boilerplate words do not decide the page; two real nouns are required when two exist — `TestBoilerplateNounsDoNotPassOrFail`
+- [x] A text form must show `oozie-probe-row` after POST — `TestProbeBinaryPostsSavedRow`
+- [x] The miss is on the wait fragment while the repair is still building — make and fix templates
+- [x] Manual publish runs the same check — `TestPublishRefusesAMiss`
+- [x] xAI uses `https://api.x.ai/v1/responses` — `TestXAIUsesResponsesAPI`
+- [x] One refusal does not kill the provider — `TestRefusedModelDoesNotKillProvider`
+- [x] Cancel, backup, data export, and key save are handled, not 500 — `TestCancelBackupExportAndKeySaveAreHandled`
+- [ ] Not browser-verified. A live recipe was not re-run after this repair.

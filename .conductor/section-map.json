@@ -1,23 +1,43 @@
 {
   "schemaVersion": 2,
   "conductorVersion": "2.1.5",
-  "framework": "unknown",
+  "framework": "go",
   "sections": [
-    {"id": "config", "agent": "config", "description": "Dependencies and build configuration", "dependsOn": [], "enabled": true},
-    {"id": "data", "agent": "data", "description": "Models and persistence", "dependsOn": ["config"], "enabled": true},
-    {"id": "logic", "agent": "logic", "description": "Business logic", "dependsOn": ["data"], "enabled": true},
-    {"id": "routes", "agent": "routes", "description": "Route and endpoint wiring", "dependsOn": ["logic"], "enabled": true},
-    {"id": "interface", "agent": "interface", "description": "User interface", "dependsOn": ["logic"], "enabled": true},
+    {"id": "config", "agent": "config", "description": "Module and build files", "dependsOn": [], "enabled": true},
+    {"id": "data", "agent": "data", "description": "Migrations and database helpers", "dependsOn": ["config"], "enabled": true},
+    {"id": "logic", "agent": "logic", "description": "Desk behavior and agent client", "dependsOn": ["data"], "enabled": true},
+    {"id": "routes", "agent": "routes", "description": "HTTP route table", "dependsOn": ["logic"], "enabled": true},
+    {"id": "interface", "agent": "interface", "description": "Templates and static assets", "dependsOn": ["logic"], "enabled": true},
     {"id": "tests", "agent": "tests", "description": "Automated tests", "dependsOn": ["routes", "interface"], "enabled": true},
-    {"id": "docs", "agent": "docs", "description": "Documentation", "dependsOn": ["tests"], "enabled": true}
+    {"id": "docs", "agent": "docs", "description": "Checklist and project docs", "dependsOn": ["tests"], "enabled": true}
   ],
   "rules": [
-    {"id": "tests", "owner": "tests", "glob": "test/**"},
-    {"id": "docs", "owner": "docs", "glob": "docs/**"},
-    {"id": "config-package", "owner": "config", "glob": "package.json"},
-    {"id": "docs-root-md", "owner": "docs", "glob": "*.md"},
-    {"id": "docs-root-txt", "owner": "docs", "glob": "*.txt"}
+    {"id": "approval-ts", "owner": "logic", "glob": "internal/agent/pi/approval.ts"},
+    {"id": "seeds-design", "owner": "docs", "glob": "internal/domain/projects/seeds/DESIGN.md"},
+    {"id": "projects-tests", "owner": "tests", "glob": "internal/domain/projects/*_test.go"},
+    {"id": "native-tests", "owner": "tests", "glob": "internal/agent/native/*_test.go"},
+    {"id": "pi-tests", "owner": "tests", "glob": "internal/agent/pi/*_test.go"},
+    {"id": "routes-file", "owner": "routes", "glob": "internal/app/routes.go"},
+    {"id": "app-tests", "owner": "tests", "glob": "internal/app/*_test.go"},
+    {"id": "build-tests", "owner": "tests", "glob": "internal/build/*_test.go"},
+    {"id": "hub-tests", "owner": "tests", "glob": "internal/domain/hub/*_test.go"},
+    {"id": "support-tests", "owner": "tests", "glob": "internal/supportpath/*_test.go"},
+    {"id": "templates", "owner": "interface", "glob": "templates/**"},
+    {"id": "static", "owner": "interface", "glob": "static/**"},
+    {"id": "assets", "owner": "interface", "glob": "assets/**"},
+    {"id": "migrations", "owner": "data", "glob": "migrations/**"},
+    {"id": "db", "owner": "data", "glob": "internal/db/**"},
+    {"id": "logic-go", "owner": "logic", "glob": "internal/**/*.go"},
+    {"id": "cmd", "owner": "config", "glob": "cmd/**"},
+    {"id": "gomod", "owner": "config", "glob": "go.mod"},
+    {"id": "gosum", "owner": "config", "glob": "go.sum"},
+    {"id": "makefile", "owner": "config", "glob": "Makefile"},
+    {"id": "embed", "owner": "config", "glob": "embed.go"},
+    {"id": "gitignore", "owner": "config", "glob": ".gitignore"},
+    {"id": "pi-agents", "owner": "docs", "glob": ".pi/agents/**"},
+    {"id": "pi-ext", "owner": "config", "glob": ".pi/extensions/**"},
+    {"id": "markdown", "owner": "docs", "glob": "*.md"}
   ],
-  "ignored": [".git/**", ".pi/**", ".conductor/**", ".conductor-state.md", ".vnodes/**", "node_modules/**", "dist/**", "build/**"],
-  "notes": ["This starter map must be replaced by a cartographer candidate before a real build."]
+  "ignored": [".git/**", ".vnodes/**", ".conductor/**", ".conductor-state.md", "dist/**"],
+  "notes": ["Ownership map for the outcome-gate repair. Conductor kit files are ignored."]
 }

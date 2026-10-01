@@ -167,13 +167,7 @@ func (s *Service) planFromStoreListing(ctx context.Context, listing storeListing
 		if err != nil {
 			// Mark thin-credit models dead so Accept/Make skip them next.
 			if pi.ModelRejected(err.Error()) || strings.Contains(strings.ToLower(err.Error()), "credit") {
-				if s.deadModels == nil {
-					s.deadModels = map[string]bool{}
-				}
-				s.deadModels[model] = true
-				if p := providerOf(model); p != "" {
-					s.deadModels["provider:"+p] = true
-				}
+				s.noteModelRefusal(model, err)
 			}
 			continue
 		}

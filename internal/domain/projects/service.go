@@ -89,6 +89,8 @@ type Service struct {
 	incompleteScaffold sync.Map
 	// outcomeRetried marks projects that already got one job-fit repair.
 	outcomeRetried sync.Map
+	// outcomeMiss is the job-fit sentence shown while that repair is still running.
+	outcomeMiss sync.Map
 	// pageProbe checks GET / before publish. Nil skips the gate (tests).
 	pageProbe func(workdir, request string) (ok bool, reason, snippet string)
 
@@ -351,8 +353,23 @@ func (s *Service) ModelChoices(ctx context.Context) (current string, models []Mo
 		signed = s.signedIn()
 	}
 	current = s.preferredSessionModel(ctx, "")
+	s.applyCatalogRefresh()
 	models = s.models()
 	return current, models, signed
+}
+
+// applyCatalogRefresh reloads chat models from the pi store. A live OpenRouter
+// list replaces that provider when the key is set and the request succeeds.
+// A network failure leaves the store list, including xAI chat models, in place.
+func (s *Service) applyCatalogRefresh() {
+	fresh := pi.RefreshChatModels(pi.OpenRouterKey())
+	if len(fresh) == 0 {
+		return
+	}
+	s.catalog.Models = pi.MergeRefreshedModels(s.catalog.Models, fresh)
+	if s.catalog.DefaultModel == "" && len(s.catalog.Models) > 0 {
+		s.catalog.DefaultModel = s.catalog.Models[0].Full
+	}
 }
 
 // reviveModel clears in-process hop memory so a manual pick is tried again.
@@ -419,7 +436,11 @@ func (s *Service) modelForNewBuildCtx(ctx context.Context, sessionModel string) 
 		return "", ErrValidation{"This model is not signed in."}
 	}
 	var rejected bool
+	var skipProvider string
 	for _, model := range candidates {
+		if skipProvider != "" && providerOf(model) == skipProvider {
+			continue
+		}
 		if s.deadModels[model] || s.deadModels["provider:"+providerOf(model)] {
 			rejected = true
 			continue
@@ -436,14 +457,13 @@ func (s *Service) modelForNewBuildCtx(ctx context.Context, sessionModel string) 
 		if !pi.ModelRejected(err.Error()) && !strings.Contains(err.Error(), "did not answer") && !strings.Contains(err.Error(), "No API key") {
 			return "", ErrValidation{err.Error()}
 		}
-		if s.deadModels == nil {
-			s.deadModels = map[string]bool{}
-		}
-		s.deadModels[model] = true
-		if provider := providerOf(model); provider != "" {
-			s.deadModels["provider:"+provider] = true
-		}
+		s.noteModelRefusal(model, err)
 		rejected = true
+		// One refusal does not record provider:. Skip siblings only in this
+		// selection so a 404 is not retried as every model on that provider.
+		if !strings.Contains(strings.ToLower(err.Error()), "no api key") {
+			skipProvider = providerOf(model)
+		}
 	}
 	if rejected {
 		return "", ErrValidation{"No model answered."}
@@ -1090,7 +1110,7 @@ func (s *Service) AgentError(projectID, requestID int64, message string) {
 	if err := s.repo.InsertMessage(context.Background(), requestID, "system", "error", message); err != nil {
 		log.Printf("persist agent error (project %d): %v", projectID, err)
 	}
-	// Skip this model (and the whole provider on credit/quota refusals) next Make.
+	// A refusal marks only this model. provider: is reserved for a missing API key.
 	if !pi.ModelRejected(message) {
 		return
 	}
@@ -1101,12 +1121,25 @@ func (s *Service) AgentError(projectID, requestID int64, message string) {
 	if s.deadModels == nil {
 		s.deadModels = map[string]bool{}
 	}
-	s.deadModels[session.Model] = true
-	low := strings.ToLower(message)
-	if strings.Contains(low, "credit") || strings.Contains(low, "insufficient") || strings.Contains(low, "max_tokens") {
-		if p := providerOf(session.Model); p != "" {
-			s.deadModels["provider:"+p] = true
-		}
+	s.noteModelRefusal(session.Model, errors.New(message))
+}
+
+// noteModelRefusal marks one model dead. The whole provider is marked dead
+// only when the error says there is no API key.
+func (s *Service) noteModelRefusal(model string, err error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return
+	}
+	if s.deadModels == nil {
+		s.deadModels = map[string]bool{}
+	}
+	s.deadModels[model] = true
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "no api key") {
+		return
+	}
+	if p := providerOf(model); p != "" {
+		s.deadModels["provider:"+p] = true
 	}
 }
 
@@ -1263,7 +1296,43 @@ func (s *Service) SaveDraft(ctx context.Context, d PublishDraft) error {
 // queued immediately, a background worker runs the build, and on success
 // the app appears in (or updates) the store with its artifact path.
 func (s *Service) Publish(ctx context.Context, projectID int64) error {
+	if err := s.gatePublish(ctx, projectID); err != nil {
+		return err
+	}
 	return s.publish(ctx, projectID, nil)
+}
+
+// gatePublish runs the same job check as the front door, before go build.
+// A miss returns an error and does not mark the job succeeded.
+func (s *Service) gatePublish(ctx context.Context, projectID int64) error {
+	if s.pageProbe == nil {
+		return nil
+	}
+	project, err := s.repo.GetProject(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	wd, err := resolveWorkdir(project)
+	if err != nil {
+		return err
+	}
+	job := s.checkedJob(ctx, projectID, s.jobText(ctx, projectID, 0))
+	ok, reason, snippet := s.pageProbe(wd, job)
+	_ = s.repo.SaveOutcome(ctx, projectID, ok, reason)
+	if ok {
+		s.outcomeMiss.Delete(projectID)
+		return nil
+	}
+	if strings.TrimSpace(reason) == "" {
+		reason = "GET / does not show the job."
+	}
+	if strings.TrimSpace(snippet) != "" {
+		reason += " Page said: " + strings.TrimSpace(snippet)
+	}
+	if jobID, jerr := s.repo.CreateJob(ctx, projectID); jerr == nil {
+		_ = s.repo.FinishJob(ctx, jobID, "failed", reason, nil)
+	}
+	return ErrValidation{reason}
 }
 
 // publish queues a build job; after (optional) runs when the job settles,

@@ -108,6 +108,9 @@ func (c *ChatClient) complete(ctx context.Context, fullModel string, messages []
 	if strings.HasPrefix(fullModel, "openai-codex/") {
 		return c.completeCodex(ctx, fullModel, messages, withTools, maxTokens)
 	}
+	if strings.HasPrefix(fullModel, "xai/") {
+		return c.completeXAI(ctx, fullModel, messages, withTools, maxTokens)
+	}
 	base, key, modelID, err := c.Keys.ResolveEndpoint(fullModel)
 	if err != nil {
 		return chatMessage{}, nil, err

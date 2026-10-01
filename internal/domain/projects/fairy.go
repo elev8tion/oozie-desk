@@ -90,7 +90,11 @@ func (s *Service) settleWish(projectID, requestID int64, status string) {
 	s.wishByRequest.Delete(requestID)
 	s.wishRetryN.Delete(wishID)
 	s.incompleteScaffold.Delete(projectID)
-	if proceed, repairing := s.acceptPage(ctx, projectID, s.jobText(ctx, projectID, requestID), func(newID int64) {
+	wishText := s.jobText(ctx, projectID, requestID)
+	if wish, err := s.repo.GetWish(ctx, wishID); err == nil && strings.TrimSpace(wish.Text) != "" {
+		wishText = strings.TrimSpace(wish.Text)
+	}
+	if proceed, repairing := s.acceptPage(ctx, projectID, wishText, func(newID int64) {
 		s.wishByRequest.Store(newID, wishID)
 	}); !proceed {
 		if !repairing {

@@ -30,6 +30,7 @@
     <p class="danger">{{$st.Error}}</p>
     <p><a class="button" href="{{$st.RetryURL}}">Try another sentence</a></p>
   {{else}}
+    {{if and (eq $st.Phase "building") $st.Error}}<p class="danger">{{$st.Error}}</p>{{end}}
     {{if $st.Permission}}
     <div class="notice" style="margin:0.75rem 0">
       <p><strong>Permission needed:</strong> {{$st.Permission.PermissionName}}</p>
