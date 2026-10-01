@@ -82,18 +82,38 @@ type chatResponse struct {
 }
 
 func (c *ChatClient) Complete(ctx context.Context, fullModel string, messages []chatMessage) (chatMessage, *piUsage, error) {
+	return c.complete(ctx, fullModel, messages, true, 1024)
+}
+
+// CompleteText is a single-turn completion without tools (recipe plans, etc.).
+func (c *ChatClient) CompleteText(ctx context.Context, fullModel, system, user string) (string, error) {
+	msgs := []chatMessage{}
+	if strings.TrimSpace(system) != "" {
+		msgs = append(msgs, chatMessage{Role: "system", Content: system})
+	}
+	msgs = append(msgs, chatMessage{Role: "user", Content: user})
+	msg, _, err := c.complete(ctx, fullModel, msgs, false, 1200)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(msg.Content), nil
+}
+
+func (c *ChatClient) complete(ctx context.Context, fullModel string, messages []chatMessage, withTools bool, maxTokens int) (chatMessage, *piUsage, error) {
 	base, key, modelID, err := c.Keys.ResolveEndpoint(fullModel)
 	if err != nil {
 		return chatMessage{}, nil, err
 	}
-	body, err := json.Marshal(chatRequest{
-		Model:      modelID,
-		Messages:   messages,
-		Tools:      codingTools(),
-		ToolChoice: "auto",
-		// Keep under thin OpenRouter credit ceilings; tool loops use many turns.
-		MaxTokens: 1024,
-	})
+	reqBody := chatRequest{
+		Model:     modelID,
+		Messages:  messages,
+		MaxTokens: maxTokens,
+	}
+	if withTools {
+		reqBody.Tools = codingTools()
+		reqBody.ToolChoice = "auto"
+	}
+	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return chatMessage{}, nil, err
 	}

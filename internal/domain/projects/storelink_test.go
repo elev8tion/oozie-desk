@@ -60,6 +60,9 @@ func TestParseStoreHTML(t *testing.T) {
 	if !strings.Contains(plan, "Focus Timer") || !strings.Contains(plan, "local web tool") {
 		t.Fatalf("plan=%q", plan)
 	}
+	if !strings.Contains(plan, "calm timer") {
+		t.Fatalf("fallback plan should use listing copy, got %q", plan)
+	}
 	rec := recipeFromListing(listing, plan)
 	if rec.Kind != recipeKind || len(rec.Prompts) != 1 {
 		t.Fatalf("recipe=%+v", rec)
@@ -70,6 +73,37 @@ func TestParseStoreHTMLRejectsThinPage(t *testing.T) {
 	_, err := parseStoreHTML(storeKindPlay, "https://play.google.com/store/apps/details?id=x", `<html><title>Sign in</title></html>`)
 	if err == nil {
 		t.Fatal("expected rejection of thin/login page")
+	}
+}
+
+func TestParseStoreHTMLRejectsChromeHomeShell(t *testing.T) {
+	html := `<html><head><title>Chrome Web Store</title>
+<meta property="og:title" content="Chrome Web Store">
+<meta property="og:description" content="Add new features to your browser and personalize your browsing experience.">
+</head><body>Chrome Web Store</body></html>`
+	if _, err := parseStoreHTML(storeKindChrome, "https://chromewebstore.google.com/", html); err == nil {
+		t.Fatal("generic Chrome home must be rejected")
+	}
+}
+
+func TestParseStoreHTMLPrefersBodyOverGenericMeta(t *testing.T) {
+	html := `<html><head>
+<title>Note Nest - Chrome Web Store</title>
+<meta property="og:title" content="Chrome Web Store">
+<meta property="og:description" content="Add new features to your browser and personalize your browsing experience.">
+</head><body><h1>Note Nest</h1><p>Note Nest keeps sticky notes beside any tab and syncs nothing to the cloud.</p></body></html>`
+	listing, err := parseStoreHTML(storeKindChrome, "https://chromewebstore.google.com/detail/note-nest/abcdefghijklmnopqrstuvwxyzabcdef", html)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(listing.Description, "sticky notes") {
+		t.Fatalf("desc=%q", listing.Description)
+	}
+	if listing.Name == "Chrome Web Store" || listing.Name == "" {
+		// title tag still has the product name even when og:title is generic.
+		if listing.Name != "Note Nest" && !strings.Contains(listing.Name, "Note Nest") {
+			t.Fatalf("name=%q", listing.Name)
+		}
 	}
 }
 

@@ -261,6 +261,16 @@ func (r *Repo) FinalAssistantMessage(ctx context.Context, requestID int64) (stri
 	return content, err
 }
 
+// FirstUserMessage is the prompt that started a request (for credit retries).
+func (r *Repo) FirstUserMessage(ctx context.Context, requestID int64) (string, error) {
+	var content string
+	err := r.db.QueryRowContext(ctx, `SELECT content FROM agent_messages WHERE request_id = ? AND role = 'user' ORDER BY id ASC LIMIT 1`, requestID).Scan(&content)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return content, err
+}
+
 func (r *Repo) CompleteRequest(ctx context.Context, id int64, status string) error {
 	// Settle any leftover streaming rows so nothing stays 'loading' forever.
 	_, _ = r.db.ExecContext(ctx, `UPDATE agent_messages SET status='completed' WHERE request_id=? AND status='loading'`, id)

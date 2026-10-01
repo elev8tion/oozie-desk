@@ -50,6 +50,21 @@ func (m *Manager) RefreshKeys() {
 	m.client.Keys = LoadKeys()
 }
 
+// CompleteText runs a single-turn, no-tools completion (recipe draft plans).
+func (m *Manager) CompleteText(ctx context.Context, model, system, user string) (string, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", fmt.Errorf("model required")
+	}
+	if _, _, _, err := m.client.Keys.ResolveEndpoint(model); err != nil {
+		m.client.Keys = LoadKeys()
+		if _, _, _, err2 := m.client.Keys.ResolveEndpoint(model); err2 != nil {
+			return "", err2
+		}
+	}
+	return m.client.CompleteText(ctx, model, system, user)
+}
+
 // Prompt starts or continues a project session with one user message.
 func (m *Manager) Prompt(opts pi.StartOptions, requestID int64, message string) error {
 	if opts.ProjectID == 0 {
@@ -90,6 +105,8 @@ func (m *Manager) Prompt(opts pi.StartOptions, requestID int64, message string) 
 }
 
 func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg string) {
+	// Release busy before RequestSettled so front-door credit retries can start
+	// a new Prompt on this project without "agent already running".
 	defer func() {
 		m.mu.Lock()
 		if s := m.sessions[projectID]; s != nil {
@@ -202,13 +219,17 @@ func (m *Manager) run(ctx context.Context, projectID, requestID int64, userMsg s
 	status := "completed"
 	if lastErr != nil {
 		status = "failed"
-		if m.sink != nil && lastErr != context.Canceled && !strings.Contains(lastErr.Error(), "context canceled") && !strings.Contains(lastErr.Error(), "context deadline") {
-			// Complete may already have reported AgentError; only fill gaps.
-			if !strings.Contains(lastErr.Error(), "model HTTP") && !strings.Contains(lastErr.Error(), "No API key") {
-				// already reported via AgentError on Complete failure
-			}
+	}
+	// Drop busy before sink settle so credit-retry can Prompt the same project.
+	m.mu.Lock()
+	if s := m.sessions[projectID]; s != nil {
+		s.busy = false
+		if s.cancel != nil {
+			s.cancel()
+			s.cancel = nil
 		}
 	}
+	m.mu.Unlock()
 	if m.sink != nil {
 		m.sink.RequestSettled(projectID, requestID, status)
 	}

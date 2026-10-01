@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"oozie/internal/agent/pi"
 )
 
 // A Recipe is an app shared as intent instead of a binary: the prompts
@@ -105,7 +107,7 @@ func (s *Service) ProposeRecipeFromLink(ctx context.Context, rawURL string) (Rec
 	default:
 		return RecipeDraft{}, ErrValidation{storeLinkRejectMsg}
 	}
-	plan := synthesizePlan(listing)
+	plan := s.planFromStoreListing(ctx, listing)
 	rec := recipeFromListing(listing, plan)
 	body, err := json.Marshal(rec)
 	if err != nil {
@@ -126,6 +128,70 @@ func (s *Service) ProposeRecipeFromLink(ctx context.Context, rawURL string) (Rec
 		return RecipeDraft{}, err
 	}
 	return s.repo.GetRecipeDraft(ctx, id)
+}
+
+// textCompleter is optional on CodingAgent (native manager). Used to turn a
+// scraped store listing into a specific build plan instead of a template.
+type textCompleter interface {
+	CompleteText(ctx context.Context, model, system, user string) (string, error)
+}
+
+func (s *Service) planFromStoreListing(ctx context.Context, listing storeListing) string {
+	fallback := synthesizePlan(listing)
+	tc, ok := s.agent.(textCompleter)
+	if !ok || tc == nil {
+		return fallback
+	}
+	signed := pi.SignedProviders(authPath())
+	if s.signedIn != nil {
+		signed = s.signedIn()
+	}
+	candidates := pi.CandidateModels(s.catalog, "", signed)
+	if len(candidates) == 0 {
+		return fallback
+	}
+	system := strings.TrimSpace(`You write build plans for oozie, a local desk that rebuilds store apps as small Go web tools.
+Read the store listing carefully. Produce a concrete natural-language plan the coding agent will follow.
+Rules:
+- Cover the same user job as the listing, simplified for one local tool.
+- Do not invent cloud accounts, store APIs, proprietary code, or binary ports.
+- Prefer one Go web page (stdlib), $ADDR listener, data/ for any saves, Back to desk + Fix footer.
+- Be specific about screens, fields, and flows from the listing — not generic filler.
+- Plain text only. No markdown code fences. Keep under ~400 words.`)
+	user := fmt.Sprintf(
+		"Store kind: %s\nProduct name: %s\nListing URL: %s\n\nListing text (scraped from the public page):\n%s\n\nWrite the build plan now.",
+		sourceKindLabel(listing.Kind), listing.Name, listing.URL, listing.Description,
+	)
+	for _, model := range candidates {
+		if s.deadModels[model] || s.deadModels["provider:"+providerOf(model)] {
+			continue
+		}
+		plan, err := tc.CompleteText(ctx, model, system, user)
+		if err != nil {
+			// Mark thin-credit models dead so Accept/Make skip them next.
+			if pi.ModelRejected(err.Error()) || strings.Contains(strings.ToLower(err.Error()), "credit") {
+				if s.deadModels == nil {
+					s.deadModels = map[string]bool{}
+				}
+				s.deadModels[model] = true
+				if p := providerOf(model); p != "" {
+					s.deadModels["provider:"+p] = true
+				}
+			}
+			continue
+		}
+		plan = strings.TrimSpace(plan)
+		if plan == "" {
+			continue
+		}
+		// Soft guard: must still mention the product somehow.
+		if !strings.Contains(strings.ToLower(plan), strings.ToLower(listing.Name)) &&
+			!strings.Contains(plan, listing.URL) {
+			plan = fmt.Sprintf("Rebuild **%s** (from %s).\n\n%s", listing.Name, listing.URL, plan)
+		}
+		return plan
+	}
+	return fallback
 }
 
 // GetRecipeDraft returns a draft by id.
@@ -217,7 +283,9 @@ func (s *Service) importRecipeJSON(ctx context.Context, raw string) (Project, er
 	if strings.TrimSpace(rec.Name) == "" || len(rec.Prompts) == 0 {
 		return Project{}, ErrValidation{"A recipe needs at least a name and one prompt."}
 	}
-	project, err := s.CreateProject(ctx, rec.Name, "", false)
+	// Trusted: the user already accepted this recipe (or pasted it). Make-wait
+	// has no permission UI, so untrusted recipe builds hang forever on write.
+	project, err := s.CreateProject(ctx, rec.Name, "", true)
 	if err != nil {
 		return Project{}, err
 	}

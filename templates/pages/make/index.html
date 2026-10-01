@@ -30,7 +30,18 @@
     <p class="danger">{{$st.Error}}</p>
     <p><a class="button" href="{{$st.RetryURL}}">Try another sentence</a></p>
   {{else}}
+    {{if $st.Permission}}
+    <div class="notice" style="margin:0.75rem 0">
+      <p><strong>Permission needed:</strong> {{$st.Permission.PermissionName}}</p>
+      {{if $st.Permission.Reason}}<p class="muted">{{$st.Permission.Reason}}</p>{{end}}
+      <form method="post" action="/projects/{{$st.ProjectID}}/agent/permissions/{{$st.Permission.ID}}" class="actions" style="margin-top:0.5rem">
+        <button class="button primary" name="decision" value="approve">Allow</button>
+        <button class="button" name="decision" value="deny">Deny</button>
+      </form>
+    </div>
+    {{else}}
     <p>{{if $st.Line}}{{$st.Line}}{{else}}Starting.{{end}}</p>
+    {{end}}
   {{end}}
 </div>
 {{end}}

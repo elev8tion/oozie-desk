@@ -2,6 +2,7 @@ package projects
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -318,6 +319,11 @@ func (h *Handlers) Permission(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.ParseForm()
 	err := h.service.ResolvePermission(r.Context(), rid, r.FormValue("decision") != "deny")
+	// Make-wait posts without HTMX; send them back to the waiting screen.
+	if r.Header.Get("HX-Request") != "true" {
+		http.Redirect(w, r, fmt.Sprintf("/make/%d", id), http.StatusSeeOther)
+		return
+	}
 	page, _ := h.service.AgentPage(r.Context(), id)
 	flash := "Permission decision sent."
 	if err != nil {

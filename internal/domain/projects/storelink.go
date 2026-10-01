@@ -53,6 +53,8 @@ var (
 	reMetaName     = regexp.MustCompile(`(?is)<meta[^>]+name=["']([^"']+)["'][^>]+content=["']([^"']*)["'][^>]*>`)
 	reMetaName2    = regexp.MustCompile(`(?is)<meta[^>]+content=["']([^"']*)["'][^>]+name=["']([^"']+)["'][^>]*>`)
 	reTitle        = regexp.MustCompile(`(?is)<title[^>]*>([^<]+)</title>`)
+	reScripts      = regexp.MustCompile(`(?is)<script\b[^>]*>[\s\S]*?</script>`)
+	reStyles       = regexp.MustCompile(`(?is)<style\b[^>]*>[\s\S]*?</style>`)
 	reTags         = regexp.MustCompile(`(?s)<[^>]+>`)
 	reSpace        = regexp.MustCompile(`\s+`)
 )
@@ -149,8 +151,10 @@ func defaultFetchStoreListing(ctx context.Context, kind, canonical string) (stor
 	if err != nil {
 		return storeListing{}, ErrValidation{"Couldn't open that store link."}
 	}
-	req.Header.Set("User-Agent", "oozie-desk/1.0 (+local recipe import; public product pages only)")
+	// Browser-like UA: some store CDNs serve a bare shell or home page to unknown bots.
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	resp, err := storeHTTPClient.Do(req)
 	if err != nil {
 		return storeListing{}, ErrValidation{"Couldn't reach that store page. Check the link and try again."}
@@ -181,29 +185,41 @@ func defaultFetchStoreListing(ctx context.Context, kind, canonical string) (stor
 
 func parseStoreHTML(kind, canonical, html string) (storeListing, error) {
 	meta := collectMeta(html)
+	// Prefer real product titles over generic store chrome in og:* tags.
 	title := cleanText(firstNonEmpty(
+		preferProductTitle(meta["og:title"], titleFromHTML(html)),
+		preferProductTitle(meta["twitter:title"], titleFromHTML(html)),
+		titleFromHTML(html),
 		meta["og:title"],
 		meta["twitter:title"],
-		meta["og:site_name"],
-		titleFromHTML(html),
 	))
 	desc := cleanText(firstNonEmpty(
 		meta["og:description"],
 		meta["twitter:description"],
 		meta["description"],
 	))
+	// Only use body copy when meta description is missing or generic store chrome.
+	// Chrome Web Store HTML bodies are noisy (nav, ratings chrome); a clean og:description wins.
+	if desc == "" || isGenericStoreBlurb(desc) {
+		if body := storeBodyExcerpt(html, title); body != "" {
+			desc = body
+		}
+	}
 	name := storeNameFromTitle(kind, title)
 	if name == "" || looksLikeNotAProductPage(title, desc, html) {
 		return storeListing{}, ErrValidation{"That page doesn't look like a public app or extension listing. Use a Chrome Web Store, App Store, or Play Store product link."}
 	}
 	headline := cleanText(firstNonEmpty(meta["og:description"], desc))
+	if isGenericStoreBlurb(headline) {
+		headline = desc
+	}
 	if utf8.RuneCountInString(headline) > 160 {
 		headline = trimRunes(headline, 157) + "…"
 	}
 	if desc == "" {
 		desc = headline
 	}
-	if desc == "" {
+	if desc == "" || isGenericStoreBlurb(desc) {
 		return storeListing{}, ErrValidation{"That listing has no description to work from. Try another link."}
 	}
 	return storeListing{
@@ -213,6 +229,104 @@ func parseStoreHTML(kind, canonical, html string) (storeListing, error) {
 		Headline:    headline,
 		Description: desc,
 	}, nil
+}
+
+func isGenericStoreBlurb(s string) bool {
+	lower := strings.ToLower(strings.TrimSpace(s))
+	switch {
+	case lower == "",
+		strings.Contains(lower, "add new features to your browser"),
+		strings.Contains(lower, "personalize your browsing experience"),
+		lower == "chrome web store",
+		lower == "google play",
+		lower == "app store":
+		return true
+	}
+	return false
+}
+
+// preferProductTitle skips generic store-home titles when a real <title> exists.
+func preferProductTitle(candidate, fallback string) string {
+	candidate = cleanText(candidate)
+	if candidate == "" || isGenericStoreBlurb(candidate) {
+		return ""
+	}
+	// "Chrome Web Store" alone is useless; keep compound titles that include a product.
+	lower := strings.ToLower(candidate)
+	if lower == "chrome web store" || lower == "google play" || lower == "app store" {
+		return ""
+	}
+	_ = fallback
+	return candidate
+}
+
+// storeBodyExcerpt pulls readable product copy from the HTML body after scripts.
+func storeBodyExcerpt(html, title string) string {
+	plain := reScripts.ReplaceAllString(html, " ")
+	plain = reStyles.ReplaceAllString(plain, " ")
+	plain = reTags.ReplaceAllString(plain, " ")
+	plain = htmlUnescape(plain)
+	plain = reSpace.ReplaceAllString(plain, " ")
+	plain = strings.TrimSpace(plain)
+	if plain == "" {
+		return ""
+	}
+	// Drop common store chrome prefixes when we can anchor on the product title.
+	name := storeNameFromTitle("", title)
+	if name == "" {
+		name = cleanText(title)
+	}
+	// Strip chrome-web-store chrome that often precedes the real blurb.
+	for _, noise := range []string{
+		"Skip to main content", "My extensions & themes", "Developer Dashboard",
+		"Give feedback", "Sign in", "Discover Extensions", "Discover apps",
+		"Follows recommended practices for Chrome extensions.",
+		"Learn more.", "Ratings are updated daily and may not reflect the most recent reviews.",
+		"Share Extension", "Add to Chrome",
+	} {
+		plain = strings.ReplaceAll(plain, noise, " ")
+	}
+	plain = reSpace.ReplaceAllString(plain, " ")
+	plain = strings.TrimSpace(plain)
+	lower := strings.ToLower(plain)
+	if name != "" {
+		if i := strings.Index(lower, strings.ToLower(name)); i >= 0 {
+			plain = strings.TrimSpace(plain[i:])
+		}
+	}
+	// Cut before related-product noise when present.
+	for _, stop := range []string{
+		" Similar ", " People also ", " More by ", " Related ",
+		" Data safety", " What's new", " App support",
+		" Featured ", // often starts a carousel of other extensions
+	} {
+		if i := strings.Index(plain, stop); i > 80 {
+			plain = plain[:i]
+			break
+		}
+	}
+	if utf8.RuneCountInString(plain) > 900 {
+		plain = trimRunes(plain, 897) + "…"
+	}
+	if utf8.RuneCountInString(plain) < 40 || looksLikeStoreChromeNoise(plain) {
+		return ""
+	}
+	return cleanText(plain)
+}
+
+func looksLikeStoreChromeNoise(s string) bool {
+	lower := strings.ToLower(s)
+	hits := 0
+	for _, n := range []string{
+		"skip to main", "developer dashboard", "my extensions",
+		"chrome web store", "add to chrome", "ratings are updated",
+		"give feedback", "sign in",
+	} {
+		if strings.Contains(lower, n) {
+			hits++
+		}
+	}
+	return hits >= 2
 }
 
 func looksLikeNotAProductPage(title, desc, html string) bool {
@@ -226,12 +340,18 @@ func looksLikeNotAProductPage(title, desc, html string) bool {
 			return true
 		}
 	}
-	lower := strings.ToLower(html)
+	// Chrome/Play home shell often has only the store name as title.
+	t := strings.ToLower(strings.TrimSpace(title))
+	if t == "chrome web store" || t == "google play" || t == "app store" {
+		return true
+	}
+	if isGenericStoreBlurb(desc) && (t == "" || strings.Contains(t, "chrome web store")) {
+		return true
+	}
 	// Empty shells with almost no product markup.
 	if len(strings.TrimSpace(reTags.ReplaceAllString(html, " "))) < 80 && desc == "" {
 		return true
 	}
-	_ = lower
 	return false
 }
 
@@ -314,19 +434,53 @@ func synthesizePlan(listing storeListing) string {
 		source = "a Google Play Store listing"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "We'll rebuild **%s** as a small local web tool on this desk.\n\n", listing.Name)
-	fmt.Fprintf(&b, "This plan comes from %s (not from anyone's private usage data):\n%s\n\n", source, listing.URL)
-	b.WriteString("What the store says it does:\n")
+	fmt.Fprintf(&b, "Rebuild **%s** as a small local web tool on this desk, matching the job described on %s.\n\n", listing.Name, source)
+	fmt.Fprintf(&b, "Source listing (public page only — not private usage data):\n%s\n\n", listing.URL)
+	b.WriteString("What the store says it does (use this as the product brief):\n")
 	b.WriteString(listing.Description)
 	b.WriteString("\n\n")
-	b.WriteString("What will be built here:\n")
-	b.WriteString("- A single local Go web page that covers the same job in a simple way.\n")
-	b.WriteString("- Sensible defaults — no account system, no store APIs, no cloning proprietary code.\n")
-	b.WriteString("- If anything is saved, it lives only under data/ on this desk.\n")
-	b.WriteString("- Footer links: Back to desk and Fix.\n")
-	b.WriteString("- Verify with `go build` and listen on $ADDR.\n\n")
-	b.WriteString("This is a fresh tool inspired by the listing's purpose, not a binary or data import from the original app.")
+	b.WriteString("Build goals derived from that brief:\n")
+	for _, bullet := range planBulletsFromDescription(listing.Description) {
+		fmt.Fprintf(&b, "- %s\n", bullet)
+	}
+	b.WriteString("- Single local Go web page; no accounts, no original store/APIs, no proprietary code copy.\n")
+	b.WriteString("- Any saved user data only under data/ on this desk.\n")
+	b.WriteString("- Footer: Back to desk and Fix. Verify with `go build`; listen on $ADDR.\n\n")
+	b.WriteString("Fresh tool inspired by the listing's purpose — not a binary or data import from the original app.")
 	return b.String()
+}
+
+// planBulletsFromDescription turns listing copy into a few concrete goals so
+// the fallback plan is not a generic placeholder when the model is offline.
+func planBulletsFromDescription(desc string) []string {
+	desc = strings.TrimSpace(desc)
+	if desc == "" {
+		return []string{"Cover the same core job as the listing in a simple local UI."}
+	}
+	// Prefer sentence splits from the start of the description.
+	parts := strings.FieldsFunc(desc, func(r rune) bool {
+		return r == '.' || r == '!' || r == '?' || r == '\n'
+	})
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		p = strings.Trim(p, "-•* ")
+		if utf8.RuneCountInString(p) < 24 {
+			continue
+		}
+		if utf8.RuneCountInString(p) > 140 {
+			p = trimRunes(p, 137) + "…"
+		}
+		// Capitalize lightly for a goal line.
+		out = append(out, p+".")
+		if len(out) >= 4 {
+			break
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, "Deliver the listing's main job in one clear local screen: "+trimRunes(desc, 160))
+	}
+	return out
 }
 
 func recipeFromListing(listing storeListing, plan string) Recipe {

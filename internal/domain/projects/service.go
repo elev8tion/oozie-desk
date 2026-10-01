@@ -76,6 +76,9 @@ type Service struct {
 	// next startup sweep). makeByRequest is the same map for the front door.
 	wishByRequest sync.Map
 	makeByRequest sync.Map
+	// makeCreditRetry tracks front-door projects that already got one automatic
+	// re-prompt after a credit/quota refusal (so we don't loop forever).
+	makeCreditRetry sync.Map
 
 	// signedIn is a test hook. Nil reads the pi auth file.
 	signedIn func() map[string]bool

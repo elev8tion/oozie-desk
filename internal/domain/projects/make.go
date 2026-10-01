@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 
@@ -22,6 +23,8 @@ type MakeView struct {
 	Text      string
 	RetryURL  string
 	Line      string
+	// Optional pending agent permission (untrusted projects).
+	Permission *PermissionRequest
 }
 
 // ImproveView is the Fix wait screen: rebuild in place, then reopen /run.
@@ -148,6 +151,11 @@ func (s *Service) MakeStatus(ctx context.Context, projectID int64) (MakeView, er
 		view.Line = "Starting the tool."
 		return view, nil
 	}
+	if perm, err := s.repo.PendingPermission(ctx, projectID); err == nil && perm != nil {
+		view.Permission = perm
+		view.Line = "Waiting for permission: " + perm.PermissionName
+		return view, nil
+	}
 	if role, toolStatus, content, err := s.repo.LatestActivity(ctx, projectID); err == nil {
 		view.Line = buildProgress(role, toolStatus, content)
 	}
@@ -215,19 +223,70 @@ func (s *Service) ImproveStatus(ctx context.Context, requestID int64) (ImproveVi
 
 // settleMake publishes a front-door build once the agent finishes. The job
 // stays running until the tool is listening, so the waiting screen can open it.
+// On a credit/quota failure it retries once with the next signed-in model.
 func (s *Service) settleMake(projectID, requestID int64, status string) {
-	v, ok := s.makeByRequest.LoadAndDelete(requestID)
-	if !ok || v.(int64) != projectID || status != "completed" {
+	v, ok := s.makeByRequest.Load(requestID)
+	if !ok || v.(int64) != projectID {
 		return
 	}
-	if err := s.Publish(context.Background(), projectID); err != nil {
+	ctx := context.Background()
+	if status == "failed" {
+		if s.retryMakeAfterCredit(ctx, projectID, requestID) {
+			return
+		}
+		s.makeByRequest.Delete(requestID)
+		return
+	}
+	if status != "completed" {
+		return
+	}
+	s.makeByRequest.Delete(requestID)
+	s.makeCreditRetry.Delete(projectID)
+	if err := s.Publish(ctx, projectID); err != nil {
 		// Publish records its own job failure when the build starts. If it
 		// cannot even start, the waiting screen still needs one sentence.
-		ctx := context.Background()
 		if jobID, jerr := s.repo.CreateJob(ctx, projectID); jerr == nil {
 			_ = s.repo.FinishJob(ctx, jobID, "failed", err.Error(), nil)
 		}
 	}
+}
+
+// retryMakeAfterCredit starts one more front-door build on the next model when
+// the previous attempt died on credits/quota. Returns true if a retry started.
+func (s *Service) retryMakeAfterCredit(ctx context.Context, projectID, requestID int64) bool {
+	if _, already := s.makeCreditRetry.LoadOrStore(projectID, true); already {
+		return false
+	}
+	_, errMsg, err := s.repo.RequestStatus(ctx, requestID)
+	if err != nil {
+		s.makeCreditRetry.Delete(projectID)
+		return false
+	}
+	low := strings.ToLower(errMsg)
+	if !strings.Contains(low, "credit") && !strings.Contains(low, "insufficient") &&
+		!strings.Contains(low, "max_tokens") && !strings.Contains(low, "quota") {
+		s.makeCreditRetry.Delete(projectID)
+		return false
+	}
+	// AgentError already marked the dead model/provider; clear sticky session
+	// model so modelForNewBuild picks the next candidate.
+	if session, err := s.repo.GetSession(ctx, projectID); err == nil && session.ID != 0 {
+		_ = s.repo.SetSessionModel(ctx, session.ID, "")
+	}
+	msg, err := s.repo.FirstUserMessage(ctx, requestID)
+	if err != nil || strings.TrimSpace(msg) == "" {
+		s.makeCreditRetry.Delete(projectID)
+		return false
+	}
+	s.makeByRequest.Delete(requestID)
+	newID, err := s.sendAgentMessage(ctx, projectID, "build", msg)
+	if err != nil || newID == 0 {
+		// Keep the retry flag so we don't thrash; waiting screen shows the failure.
+		return false
+	}
+	s.trackFrontDoor(newID, projectID)
+	log.Printf("make project %d: credit refusal on request %d — retrying as request %d", projectID, requestID, newID)
+	return true
 }
 
 func pageBuildMessage(text string) string {
