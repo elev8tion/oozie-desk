@@ -6,3 +6,8 @@
 # macOS
 .DS_Store
 /dist/
+
+# Conductor run leftovers (kit itself is tracked)
+.conductor/active.json
+.conductor/engine.lock
+.conductor/runs/

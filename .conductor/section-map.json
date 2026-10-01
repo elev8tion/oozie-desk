@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "conductorVersion": "2.1.5",
+  "framework": "unknown",
+  "sections": [
+    {"id": "config", "agent": "config", "description": "Dependencies and build configuration", "dependsOn": [], "enabled": true},
+    {"id": "data", "agent": "data", "description": "Models and persistence", "dependsOn": ["config"], "enabled": true},
+    {"id": "logic", "agent": "logic", "description": "Business logic", "dependsOn": ["data"], "enabled": true},
+    {"id": "routes", "agent": "routes", "description": "Route and endpoint wiring", "dependsOn": ["logic"], "enabled": true},
+    {"id": "interface", "agent": "interface", "description": "User interface", "dependsOn": ["logic"], "enabled": true},
+    {"id": "tests", "agent": "tests", "description": "Automated tests", "dependsOn": ["routes", "interface"], "enabled": true},
+    {"id": "docs", "agent": "docs", "description": "Documentation", "dependsOn": ["tests"], "enabled": true}
+  ],
+  "rules": [
+    {"id": "tests", "owner": "tests", "glob": "test/**"},
+    {"id": "docs", "owner": "docs", "glob": "docs/**"},
+    {"id": "config-package", "owner": "config", "glob": "package.json"},
+    {"id": "docs-root-md", "owner": "docs", "glob": "*.md"},
+    {"id": "docs-root-txt", "owner": "docs", "glob": "*.txt"}
+  ],
+  "ignored": [".git/**", ".pi/**", ".conductor/**", ".conductor-state.md", ".vnodes/**", "node_modules/**", "dist/**", "build/**"],
+  "notes": ["This starter map must be replaced by a cartographer candidate before a real build."]
+}

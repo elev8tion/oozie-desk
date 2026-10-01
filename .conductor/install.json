@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "installedVersion": "2.1.5",
+  "installedAt": "2026-10-01T18:58:41.039Z",
+  "source": "conductor",
+  "files": [
+    {
+      "path": ".conductor/runtime/extension/conductor-ownership.mjs",
+      "sha256": "2073123673117593b3ec085709d3e808f32098ad5f5d219f71e5d5d77143f3dd"
+    },
+    {
+      "path": ".conductor/runtime/schemas/active.schema.json",
+      "sha256": "6e8c57656dbeb1894003de557aa1fc883d2ab2a8cb7a75918f0a62e0613b25df"
+    },
+    {
+      "path": ".conductor/runtime/schemas/conductor-state.schema.json",
+      "sha256": "dd9b570fecd3ff1c3b6baea77b84a29de801eadbf0dd746aa2e2bbe64f8c383b"
+    },
+    {
+      "path": ".conductor/runtime/schemas/install-manifest.schema.json",
+      "sha256": "b624b1e1ddd9b239aa8da623ee964be2c9a0f5321d9f72866d7328a5d0dbe7ae"
+    },
+    {
+      "path": ".conductor/runtime/schemas/report-event.schema.json",
+      "sha256": "9dabfe5160d979a55ef96b90c09c7f8ad90e2caa15ffba9aedbef15aae303444"
+    },
+    {
+      "path": ".conductor/runtime/schemas/review-verdict.schema.json",
+      "sha256": "c2fe0d2e14690cf760ec0d36a38c9acd1a31be3fb5baf771603478818c601d00"
+    },
+    {
+      "path": ".conductor/runtime/schemas/run-telemetry.schema.json",
+      "sha256": "581e0fda307e10bae6b54d4a29ee851e7d6289545f3096a8de68461e9d25e423"
+    },
+    {
+      "path": ".conductor/runtime/schemas/section-map.schema.json",
+      "sha256": "7b92533c56ac8b332273a6cf47819a7a8453dadf7e025c5ed0b72ff30b193882"
+    },
+    {
+      "path": ".conductor/runtime/schemas/verification-plan.schema.json",
+      "sha256": "0450d4e9fe818c213f034416dd472a77069ac62f2872c675f919c7cf26f2cc99"
+    },
+    {
+      "path": ".conductor/runtime/schemas/verification-result.schema.json",
+      "sha256": "6d1ad52ea51c5e255cb8a65b283508dbee38dec6341bb185d632b4401ee5f2c3"
+    },
+    {
+      "path": ".conductor/runtime/scripts/conductor.mjs",
+      "sha256": "2914ee7ffc157f708cf57c49da999d176ffa24b676d770bc68d17d311c263dbd"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/context-paths.mjs",
+      "sha256": "88dba07d672b648338d849651ebd750ae844ab8ccb4908481ea1492ccf7de135"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/context.mjs",
+      "sha256": "8e6ad628d7cb14adccc6659f9bced4b509e13cb305e81fb6125bf8eb85cfd81c"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/engine.mjs",
+      "sha256": "7e10b1b30be5bc6df995ab091bc0ac1d7ff529d32ea3d4f4728e6e9a7df5eab6"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/gates.mjs",
+      "sha256": "6c74b5ba06c2884ea8f808149c7344bde8e54526e7503fb33ddf0d218dc2a99a"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/install-manifest.mjs",
+      "sha256": "43ae384355c252c7477004a4150e5ffd2fe4060c3b68f49fe58533498562d10c"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/report.mjs",
+      "sha256": "f5e664482f1abad08f6f9753c522c7b651a0725b3d87a7071cd9772c54742023"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/rpc.mjs",
+      "sha256": "de20ba689f3fb8b34a3f22eac85419f3a9473dd10efb792c11e26b03fd79d7ce"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/state.mjs",
+      "sha256": "47b86a985ff8b9c3474802cc39d9fe94e1a86af10f029af700bdd9e6f0daa72d"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/telemetry.mjs",
+      "sha256": "79e4e5f1ac01fd20661025160b24f9085465edd84c45b3a5849aa218144e60a7"
+    },
+    {
+      "path": ".conductor/runtime/scripts/lib/verify.mjs",
+      "sha256": "6eb04b76da62e607b3615b4c9f4ed589eb75cedd08d2fa18cde0580bb933c49b"
+    },
+    {
+      "path": ".conductor/runtime/VERSION",
+      "sha256": "e533f272c7ca6274814c1d5858bef6186bd7b6ac3e8e0f676ba1a087e5d08a0f"
+    },
+    {
+      "path": ".pi/agents/cartographer.md",
+      "sha256": "5ac8f3a082cee475a654425d5e8e1e441ceebef3cade2a9ecf9bdbef39ed8834"
+    },
+    {
+      "path": ".pi/agents/config.md",
+      "sha256": "7b888d777fcffd738ba723b643158ed8969aa9157910e77e3fdedb5788f9c458"
+    },
+    {
+      "path": ".pi/agents/data.md",
+      "sha256": "ba2687f1d5c2b6bb8debc09d4a4817bfe6879ebc75b438c007f3220e114178e7"
+    },
+    {
+      "path": ".pi/agents/docs.md",
+      "sha256": "04eb3f28a7b44ba329e5130b1733aafda117e972b22933832d0a9f7060931281"
+    },
+    {
+      "path": ".pi/agents/interface.md",
+      "sha256": "30fa6df3d5c4d7c6cbe7b630b399df6f946f6230291c12804de4a1a68adfe015"
+    },
+    {
+      "path": ".pi/agents/logic.md",
+      "sha256": "24e833c147e41477659a7db97fe1fa965002174a88c95647d88710a1d559cda8"
+    },
+    {
+      "path": ".pi/agents/reviewer.md",
+      "sha256": "2bb11ed3df7d3b49c6cf0fd381e1b56a5bdccfb1d0cfe9983cc3bd83ba082425"
+    },
+    {
+      "path": ".pi/agents/routes.md",
+      "sha256": "bfd6b5c6647476f8418470c7267f5be2951df2550527d6617a4f858595a22e17"
+    },
+    {
+      "path": ".pi/agents/tests.md",
+      "sha256": "959bb0d3b464e54d6e185d442cb44470e56dd433cc5324f5d88d5fe9943165af"
+    },
+    {
+      "path": ".pi/extensions/conductor-guard.ts",
+      "sha256": "d1552804fa07c02835bd9f6a5cfd498aeebd0c6ed68c0d144026a91f25957463"
+    },
+    {
+      "path": ".pi/extensions/conductor-ownership.mjs",
+      "sha256": "2073123673117593b3ec085709d3e808f32098ad5f5d219f71e5d5d77143f3dd"
+    }
+  ]
+}
